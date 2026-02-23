@@ -23,6 +23,8 @@ HOLD_BARS = 5
 # =========================
 def get_daily_data(symbol, start):
     df = yf.download(symbol, start=start, auto_adjust=True, progress=False)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.droplevel(1)
     df = df.dropna()
     return df
 
