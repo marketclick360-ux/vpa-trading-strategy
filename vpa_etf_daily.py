@@ -1,3 +1,5 @@
+import os
+import argparse
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -12,6 +14,7 @@ INITIAL_EQUITY  = 10000.0
 COST_PER_TRADE  = 0.001
 LOOKBACK_WINDOW = 20
 HOLD_BARS       = 5
+CACHE_DIR       = 'data_cache'   # where downloaded daily bars are saved as CSV
 
 # =========================
 # FULL ETF UNIVERSE
@@ -33,11 +36,61 @@ ALL_ETFS = [sym for group in ETF_UNIVERSE.values() for sym in group]
 # =========================
 # DATA
 # =========================
-def get_daily_data(symbol, start):
+def _cache_path(symbol, cache_dir):
+    return os.path.join(cache_dir, f"{symbol}.csv")
+
+
+def _read_cache(symbol, start, cache_dir):
+    """Load a symbol's cached daily bars, sliced to >= start. None if absent/empty."""
+    path = _cache_path(symbol, cache_dir)
+    if not os.path.exists(path):
+        return None
+    df = pd.read_csv(path, index_col=0, parse_dates=True)
+    if df.empty:
+        return None
+    df = df[df.index >= pd.Timestamp(start)]
+    return df if not df.empty else None
+
+
+def _download(symbol, start):
     df = yf.download(symbol, start=start, auto_adjust=True, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.droplevel(1)
-    df = df.dropna()
+    return df.dropna()
+
+
+def get_daily_data(symbol, start, cache_dir=None, offline=False):
+    """Fetch daily bars for `symbol` from `start`.
+
+    cache_dir : when set, downloads are saved here as CSV and reused.
+    offline   : load only from cache, never hit the network (raises if missing).
+    Network failures fall back to cache automatically when a cache_dir is given.
+    """
+    # Offline: cache is the only source.
+    if offline:
+        df = _read_cache(symbol, start, cache_dir or CACHE_DIR)
+        if df is None:
+            raise FileNotFoundError(
+                f"No cached data for {symbol} in '{cache_dir or CACHE_DIR}'. "
+                f"Run once online with --cache to populate it."
+            )
+        return df
+
+    # Online: try the network, fall back to cache if it fails.
+    try:
+        df = _download(symbol, start)
+    except Exception:
+        if cache_dir:
+            cached = _read_cache(symbol, start, cache_dir)
+            if cached is not None:
+                return cached
+        raise
+
+    # Persist a fresh copy when caching is enabled.
+    if cache_dir and not df.empty:
+        os.makedirs(cache_dir, exist_ok=True)
+        df.to_csv(_cache_path(symbol, cache_dir))
+
     return df
 
 # =========================
@@ -132,7 +185,7 @@ def calc_metrics(data, trades, symbol, mode):
 # =========================
 # TODAY'S SCANNER
 # =========================
-def scan_today(symbols):
+def scan_today(symbols, cache_dir=None, offline=False):
     print(f"\n{'='*70}")
     print(f"  VPA DAILY ETF SCANNER  |  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'='*70}")
@@ -140,7 +193,7 @@ def scan_today(symbols):
     clean  = []
     for sym in symbols:
         try:
-            df = get_daily_data(sym, '2025-06-01')
+            df = get_daily_data(sym, '2025-06-01', cache_dir=cache_dir, offline=offline)
             if len(df) < LOOKBACK_WINDOW + 2:
                 continue
             df = detect_vpa_anomalies(df)
@@ -176,12 +229,12 @@ def scan_today(symbols):
 # =========================
 # BACKTEST ALL ETFs
 # =========================
-def backtest_all(symbols):
+def backtest_all(symbols, cache_dir=None, offline=False):
     results = []
     print(f"\nRunning daily backtest on {len(symbols)} ETFs from {START_DATE}...")
     for sym in symbols:
         try:
-            df = get_daily_data(sym, START_DATE)
+            df = get_daily_data(sym, START_DATE, cache_dir=cache_dir, offline=offline)
             if len(df) < LOOKBACK_WINDOW + 10:
                 continue
             df = detect_vpa_anomalies(df)
@@ -196,15 +249,40 @@ def backtest_all(symbols):
 # =========================
 # MAIN
 # =========================
+def parse_args():
+    p = argparse.ArgumentParser(
+        description="Anna Coulling VPA - Daily ETF Scanner & Backtest"
+    )
+    p.add_argument('--cache', action='store_true',
+                   help="Save downloaded data to CSV and reuse it (falls back to "
+                        "cache if the network fails).")
+    p.add_argument('--offline', action='store_true',
+                   help="Use only cached data, never hit the network. Implies --cache. "
+                        "Run once online with --cache first to populate the cache.")
+    p.add_argument('--cache-dir', default=CACHE_DIR,
+                   help=f"Directory for cached CSVs (default: {CACHE_DIR}).")
+    return p.parse_args()
+
+
 def main():
+    args = parse_args()
+    use_cache = args.cache or args.offline
+    cache_dir = args.cache_dir if use_cache else None
+
     print("\nAnna Coulling VPA - Daily ETF Scanner & Backtest")
-    print(f"Universe: {len(ALL_ETFS)} ETFs | Start: {START_DATE}\n")
+    print(f"Universe: {len(ALL_ETFS)} ETFs | Start: {START_DATE}")
+    if args.offline:
+        print(f"Mode: OFFLINE (cache only) | Cache: {cache_dir}\n")
+    elif use_cache:
+        print(f"Mode: ONLINE + cache | Cache: {cache_dir}\n")
+    else:
+        print("Mode: ONLINE (no cache)\n")
 
     # 1. TODAY'S LIVE SCAN
-    alerts = scan_today(ALL_ETFS)
+    alerts = scan_today(ALL_ETFS, cache_dir=cache_dir, offline=args.offline)
 
     # 2. BACKTEST ALL ETFs
-    results_df = backtest_all(ALL_ETFS)
+    results_df = backtest_all(ALL_ETFS, cache_dir=cache_dir, offline=args.offline)
 
     # 3. PRINT BACKTEST SUMMARY
     print("\n" + "="*90)
