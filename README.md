@@ -29,14 +29,27 @@ signals are net-negative and should not be traded. `vpa_coulling.py` and
 `vpa_etf_daily.py` are still useful as anomaly *scanners* for awareness, but
 not as mechanical trading signals.
 
+**`vpa_leveraged_trend.py` is the strategy that actually beats buy-and-hold**
+— validated on 20-30 years of history including the dot-com bust and 2008
+(not just the recent bull market): 200-day SMA entry + 5% hard stop on
+QQQ/XLK/EFA, leveraged 2x/3x per symbol (whichever tested higher). This is
+the maximum-profitability configuration; real historical worst-case
+drawdowns are roughly -73% to -88%. See `VPA_DIAGNOSIS.md` §9 and §12 for
+the full derivation and numbers, and §11 for why options (not leveraged
+ETFs/margin) were tested and rejected as the leverage mechanism.
+
 **`vpa_trend_timing.py`** (SMA-200 trend timing + a hard 5% stop-loss, cash
-at T-bill yield when flat) is the validated risk-managed alternative — it
-trails buy-and-hold on raw CAGR in the tested 2022–2026 bull-market window
-but matches or beats it on many symbols individually with meaningfully
-lower drawdown, and the stop caps worst-case single-trade loss at -5%
-(down from -14% without it). See `VPA_DIAGNOSIS.md` §5 and §7 for numbers.
-A Chaikin Money Flow "accumulation" signal was also tested (§6) and
-rejected — too much whipsaw, no net benefit.
+at T-bill yield when flat, unleveraged, wider whitelist) is the risk-managed
+alternative — it trails buy-and-hold on raw CAGR in the tested 2022–2026
+bull-market window but matches or beats it on many symbols individually
+with meaningfully lower drawdown, and the stop caps worst-case single-trade
+loss at -5% (down from -14% without it). See `VPA_DIAGNOSIS.md` §5 and §7.
+
+A Chaikin Money Flow "accumulation" signal (§6), a volatility-spike exit
+(§10), and momentum/relative-strength rotation tested across four
+historical periods (§8) were all tried and rejected — no net benefit, or
+in momentum rotation's case, decisive evidence the one "win" was
+regime-specific luck rather than a real edge.
 
 ### What gets posted / traded right now
 

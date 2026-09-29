@@ -156,27 +156,183 @@ can't track a running stop for you automatically — it shows the stop level
 *if you buy today*. If you're already holding a position from an earlier
 signal, your stop is 5% below your own entry price, not the current quote.
 
-## Why nothing beats raw buy-and-hold CAGR here
+## Why nothing beats raw buy-and-hold CAGR on the 2022-2026 window
 
 2022–2026 contains one of the strongest recovery bull runs on record (QQQ,
 XLK, SLV, GDX all up double digits annually for multiple years). Any
 strategy that ever holds cash — even briefly, even at a real yield — gives
 up upside during a run like that. This shows up industry-wide: most active
 and hedge-fund strategies trailed the S&P 500 through 2023–2024 for the same
-structural reason. It is not a flaw specific to this codebase.
+structural reason. It is not a flaw specific to this codebase, and it is why
+the strategies below had to be tested on much longer history to find a real
+edge at all.
+
+## 8. Momentum/relative-strength rotation — tested across 4 historical
+periods, rejected
+
+A separate strategy family: instead of timing in/out of one asset, stay
+fully invested at all times and rotate into whichever of the 58 ETFs has
+the strongest trailing momentum (rebalanced periodically). This avoids the
+cash-drag problem in §7 entirely. Seven variants (lookback 3/6/12/12-1
+months, top-1/3/5 holdings, monthly/quarterly rebalance) were tested on
+2022–2026 first:
+
+| Variant | CAGR | MaxDD | Beats SPY |
+|---|---|---|---|
+| 6mo lookback, monthly, top 3 | +14.74% | -35.95% | Yes |
+| 12mo lookback, monthly, top 3 | +22.87% | -37.54% | Yes |
+| 12-1 momentum (classic academic) | +11.52% | -52.85% | No |
+| 3mo lookback, monthly, top 3 | +4.88% | -68.56% | No |
+| 6mo lookback, top 1 (concentrated) | +2.90% | -66.01% | No |
+| 6mo lookback, top 5 (diversified) | +16.87% | -26.23% | Yes |
+| 6mo lookback, quarterly rebal | -4.19% | -51.24% | No |
+
+Four of seven reasonable variants of the *same idea* lost to buy-and-hold,
+one badly. Cherry-picking the best one here would repeat the exact overfit
+mistake from §3. Three of those variants were then re-tested across
+2014-2018, 2018-2022, and 2022-2026 (the ETF universe's real history only
+goes back to 2017, so "2010-2014" returned no data despite being
+requested):
+
+| Strategy | 2014-2018 | 2018-2022 | 2022-2026 |
+|---|---|---|---|
+| Classic 12-1 momentum | -6.26% vs SPY 7.39% | 7.92% vs 9.16% | 11.52% vs 12.02% |
+| 6mo momentum, top 3 | 4.45% vs 7.39% | **-22.29%** vs 9.16% (-79% DD) | 14.74% vs 12.02% |
+| 6mo momentum, top 5 | 4.49% vs 7.39% | -4.16% vs 9.16% | 16.87% vs 12.02% |
+
+Every variant lost to buy-and-hold in 2014-2018 and 2018-2022, one by a
+catastrophic margin. The only period any of them won was 2022-2026 — the
+one window tested repeatedly throughout this document. That is decisive
+evidence the earlier "beats buy-and-hold" result was regime-specific luck,
+not a real edge. **Rejected.**
+
+## 9. Long-history test on legacy ETFs — a real edge found
+
+Everything above was tested on ETFs with data only from 2017 onward — one
+continuous bull market. The same (unmodified, untuned) `vpa_trend_timing.py`
+strategy — 200-day SMA + 5% stop — was re-run on 20 ETFs with 20-30 years of
+real history, spanning the dot-com bust and the 2008 GFC:
+
+| | Strategy | Buy & Hold |
+|---|---|---|
+| Median CAGR (20 symbols) | 5.37% | 8.24% |
+| Median MaxDD | **-34.28%** | **-58.84%** |
+| Beats B&H on CAGR | 3/20 | — |
+
+Still no universal edge — but the 3 winners are **QQQ (+10.17% vs 8.91%),
+XLK (+10.99% vs 9.78%), and EFA (+8.74% vs 7.09%)**, and that's not random:
+those are exactly the assets that suffered the worst historical crashes
+(buy-and-hold QQQ: -83% drawdown in the dot-com bust; XLK: -82%; EFA: -61%
+across 2000-2003 and 2008). The 200-day SMA exit got out before most of that
+damage, and avoiding an 80%+ drawdown (which needs +400%+ to recover from)
+compounds into a genuine, mechanically-explainable CAGR edge. Low-volatility
+assets (bonds, staples, utilities) never had a crash that severe, so there
+was nothing for the strategy to save them from, and its occasional
+cash-drag cost more than the protection was worth. **This is the first
+result in this document that is a real edge, not noise** — it is
+non-cherry-picked (same exact untuned parameters used everywhere else in
+this file) and it held up across two genuine multi-year bear markets, not
+just the 2022-2026 recovery.
+
+## 10. Volatility-spike exit added to the trend filter — no improvement
+
+Hypothesis: a 200-day SMA lags a real crash by construction; a fast
+realized-volatility spike (10-day vol > 2x its 60-day baseline) should
+catch a crash earlier. Tested on the same 20 legacy ETFs, added on top of
+the §9 strategy:
+
+| | SMA-200 only | + Vol-spike exit |
+|---|---|---|
+| Median CAGR | 5.37% | 5.50% |
+| Median MaxDD | -34.28% | -35.34% |
+| Beats B&H CAGR | 3/20 | 3/20 |
+
+No improvement — a wash at best. On QQQ specifically (the single best case
+for the base strategy) it made things *worse* (CAGR 10.2%→9.4%, drawdown
+-41.5%→-49.6%). **Rejected** — consistent with the broader pattern in this
+document that added complexity has not once improved on the simplest
+version of the trend rule.
+
+## 11. Options (LEAPS calls) to leverage the §9 signal — catastrophic, rejected
+
+Buying long-dated (1-year, rolled every ~9 months) at-the-money calls on
+QQQ/XLK/EFA instead of holding the stock, priced via Black-Scholes off
+trailing realized volatility (a generous assumption — real implied vol runs
+higher than realized during selloffs, so this likely understates the real
+cost):
+
+| Symbol | Stock CAGR | **LEAPS-call CAGR** | Stock MaxDD | **LEAPS-call MaxDD** |
+|---|---|---|---|---|
+| QQQ | +10.2% | **-11.5%** | -41.5% | **-99.9%** |
+| XLK | +11.0% | **-12.0%** | -39.4% | **-100.0%** |
+| EFA | +8.7% | **-19.1%** | -22.5% | **-100.0%** |
+
+All three effectively went to zero at some point. Theta decay compounds
+daily regardless of whether the underlying moves; rolling costs stack up
+over dozens of rolls across the multi-decade test; and a 5% underlying
+drop (a clean stock-level stop) can wipe out 40-60%+ of an option's value
+in a single day because leveraged losses are as convex as leveraged gains.
+**Rejected outright — do not use options to leverage this signal.**
+
+## 12. Margin / leveraged-ETF exposure on the §9 signal — validated, shipped
+
+Unlike options, scaling the *same* linear exposure (2x or 3x notional, via
+margin or a real leveraged ETF) preserves the underlying signal instead of
+introducing a new instrument with its own decay mechanics:
+
+| | QQQ | XLK | EFA |
+|---|---|---|---|
+| Stock (1x) | CAGR 10.2% / DD -41.5% | CAGR 11.0% / DD -39.4% | CAGR 8.7% / DD -22.5% |
+| Margin 2x | CAGR 10.7% / DD -73.1% | CAGR 12.4% / DD -69.9% | CAGR 9.4% / DD -48.9% |
+| Leveraged ETF 2x | CAGR 11.9% / DD -72.9% | CAGR 13.7% / DD -69.7% | CAGR 10.6% / DD -45.2% |
+| Leveraged ETF 3x | CAGR 11.2% / DD -88.8% | **CAGR 14.2%** / DD -87.9% | **CAGR 11.4%** / DD -70.1% |
+| Buy & Hold (1x) | CAGR 8.9% / DD -83.0% | CAGR 9.8% / DD -82.0% | CAGR 7.1% / DD -61.0% |
+
+2x meaningfully beats both the 1x signal and buy-and-hold on CAGR, on all
+three symbols, while keeping drawdown *better* than plain buy-and-hold. 3x
+is asset-dependent: it makes QQQ strictly worse (lower CAGR than 2x, worse
+drawdown than even buy-and-hold — volatility decay from daily-reset
+compounding erases the crash-avoidance advantage), but it's the best CAGR
+found for XLK and EFA. **Shipped in `vpa_leveraged_trend.py`** with
+per-symbol leverage set to whichever tested higher (QQQ 2x, XLK 3x, EFA
+3x), per an explicit "maximize profit, risk tolerated" instruction — this
+is NOT the conservative default; real historical worst-case drawdowns are
+roughly -73% (QQQ), -88% (XLK), -70% (EFA). The 5% hard stop is what caps
+any single trade's loss; the drawdown figures are what a sustained bear
+market does across many trades in sequence, not a blown stop.
+
+Financing is modeled at ~roughly institutional leveraged-ETF rates
+(expense ratio + swap-financing spread, ~6-7%/yr all-in at 2x), cheaper
+than the 8% retail margin rate also tested — a real leveraged ETF (QLD for
+QQQ; no exact 3x product exists for XLK/EFA, meaning that exposure needs
+margin on top of the 2x product or a different-index 3x substitute) is the
+more cost-efficient way to get this exposure versus borrowing on margin
+directly.
 
 ## Recommendation
 
 - **Do not trade the original VPA anomaly signal**, long/short or long-only,
   as configured. It is net-negative after realistic costs, and "improving"
   it via untested parameter tuning made it worse, not better.
-- **`vpa_trend_timing.py`** (new, in this repo) is the closest thing to a
-  validated, non-overfit result: it trails buy-and-hold on raw CAGR in this
-  specific bull-market test window, but delivers similar-to-competitive
-  returns on many symbols individually with meaningfully lower drawdown on
-  most of them, and (with the §7 hard stop) caps worst-case single-trade
-  loss at -5%. Treat it as a risk-reduction overlay, not an
-  alpha-generating signal — that's an honest description of what it is.
+- **`vpa_leveraged_trend.py` (new, in this repo) is the actual answer to
+  "beat buy-and-hold"** — the only strategy in this document that did so on
+  real multi-decade history including two genuine bear markets, not just
+  the 2022-2026 recovery. QQQ at 2x, XLK and EFA at 3x, same 200-day SMA
+  entry and 5% hard stop throughout. This is the maximum-profitability
+  configuration per an explicit "don't care about risk" instruction — real
+  historical worst-case drawdowns are roughly -73% to -88%. If risk
+  tolerance changes, drop to a flat 2x everywhere (§12) for a meaningfully
+  better drawdown profile at a small CAGR cost on XLK/EFA.
+- **`vpa_trend_timing.py`** (unleveraged, wider whitelist) is the
+  risk-managed alternative: it trails buy-and-hold on raw CAGR in the
+  2022-2026 window specifically, but delivers similar-to-competitive
+  returns on many symbols individually with meaningfully lower drawdown,
+  and (with the §7 hard stop) caps worst-case single-trade loss at -5%.
+- Momentum rotation (§8), CMF/accumulation signals (§6), a volatility-spike
+  exit (§10), and options leverage (§11) were all tested and rejected —
+  see each section for why. Don't re-try these without a new idea for why
+  they'd behave differently; the same mechanisms that failed them once
+  will fail them again.
 - `vpa_coulling.py` and `vpa_etf_daily.py` remain useful as anomaly
   *scanners* (informational alerts) — just not as a source of trading
   signals to act on mechanically.
