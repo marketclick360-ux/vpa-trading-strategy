@@ -98,6 +98,64 @@ actually does.
 | Beats B&H on CAGR | 27/58 (47%) | — |
 | Beats B&H on drawdown | 49/58 (85%) | — |
 
+## 6. Chaikin Money Flow (accumulation) as a signal — tested, rejected
+
+Chaikin Money Flow (20-day) is the standard multi-bar accumulation/
+distribution indicator: it weights each day's volume by where the close
+landed within that day's range, averaged over 20 days. Two variants were
+tested OOS (2022–2026), both untuned (standard 20-day period):
+
+**Standalone (long whenever CMF(20) > 0, cash otherwise):**
+
+| | CMF(20) alone | SMA-200 (existing) | Buy & Hold |
+|---|---|---|---|
+| Median CAGR | -1.17% (mean) | 3.61% (mean) | 4.21% (mean) |
+| Profitable AND beats B&H | 4/58 | 21/58 | — |
+| Median position flips | 114 | 38 | — |
+
+**As a confirmation filter (long only when SMA200 uptrend AND CMF(20) > 0):**
+
+| | SMA200 + CMF confirm | SMA200 alone |
+|---|---|---|
+| Median CAGR | 1.69% | 4.11% |
+| Profitable AND beats B&H | 11/58 | 21/58 |
+| Median position flips | 88 | 38 |
+
+Both fail for the same reason: CMF is a much noisier, faster-moving
+indicator than a 200-day SMA. Standalone, it flips position ~3x more often,
+and the transaction-cost drag from all that flipping wipes out any
+accumulation signal it might carry. As a confirmation filter, it just
+injects that same noise into an otherwise-stable trend signal, more than
+doubling the whipsaw. **Rejected — not added to the codebase.**
+
+## 7. Hard stop-loss added to the trend exit
+
+The 200-day SMA exit is slow: it can't react to a sudden single-day drop
+before real damage is done. A hard stop — exit immediately if a day's Low
+breaches 5% below the entry price, regardless of the SMA — was tested on
+top of the existing (no-CMF) trend-timing strategy, OOS, 2022–2026:
+
+| | No stop | With 5% hard stop |
+|---|---|---|
+| Median CAGR | 4.88% | 4.91% |
+| Mean CAGR | 6.12% | 6.42% |
+| Median MaxDD | -17.04% | -14.78% |
+| **Worst single trade, any symbol** | **-14.14%** | **-5.10%** |
+| Profitable AND beats B&H (of 21 pre-stop whitelist symbols) | 16/21 | 18/21 |
+
+Returns are essentially unchanged, but the worst-case single-trade loss
+drops from -14.14% to -5.10% — the stop catches gap-downs the SMA can't.
+**Accepted.** The whitelist was rebuilt from scratch across the full
+58-symbol universe under the with-stop rules (not just re-tested on the
+old 21), since membership can shift once the exit rule changes: EWJ, HACK,
+and QQQ dropped out; nothing new was added. Current whitelist: 18 symbols
+(`BEATS_BH_WHITELIST` in `vpa_trend_timing.py`).
+
+**Caveat:** the live scanner has no record of your actual fill price, so it
+can't track a running stop for you automatically — it shows the stop level
+*if you buy today*. If you're already holding a position from an earlier
+signal, your stop is 5% below your own entry price, not the current quote.
+
 ## Why nothing beats raw buy-and-hold CAGR here
 
 2022–2026 contains one of the strongest recovery bull runs on record (QQQ,
@@ -115,8 +173,9 @@ structural reason. It is not a flaw specific to this codebase.
 - **`vpa_trend_timing.py`** (new, in this repo) is the closest thing to a
   validated, non-overfit result: it trails buy-and-hold on raw CAGR in this
   specific bull-market test window, but delivers similar-to-competitive
-  returns on ~47% of symbols individually with meaningfully lower drawdown
-  on ~85% of them. Treat it as a risk-reduction overlay, not an
+  returns on many symbols individually with meaningfully lower drawdown on
+  most of them, and (with the §7 hard stop) caps worst-case single-trade
+  loss at -5%. Treat it as a risk-reduction overlay, not an
   alpha-generating signal — that's an honest description of what it is.
 - `vpa_coulling.py` and `vpa_etf_daily.py` remain useful as anomaly
   *scanners* (informational alerts) — just not as a source of trading

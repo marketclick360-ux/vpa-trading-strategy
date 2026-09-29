@@ -1,15 +1,21 @@
 """
-SMA-200 trend-timing strategy, validated out-of-sample against buy-and-hold.
+SMA-200 trend-timing strategy + hard stop-loss, validated out-of-sample
+against buy-and-hold.
 
 Why this file exists: the original VPA anomaly signals (vpa_coulling.py,
 vpa_etf_daily.py) were walk-forward tested and did NOT show a durable edge
 -- see VPA_DIAGNOSIS.md for the full trade-level audit. This is the
 risk-adjusted alternative that survived out-of-sample testing: be long a
 symbol only while it's above its 200-day SMA, and park cash at the prevailing
-T-bill yield the rest of the time. It does not beat buy-and-hold on raw CAGR
-in the strong-bull 2022-2026 test window (median 4.11% vs 6.38%), but it
-matches or beats CAGR on ~47% of symbols individually and cuts max drawdown
-on ~80% of them (median -21% vs -28%). See VPA_DIAGNOSIS.md for the numbers.
+T-bill yield the rest of the time.
+
+A hard STOP_LOSS_PCT is layered on top of the trend exit: the 200-day SMA
+is slow and can't react to a sudden drop, so a position also exits the
+moment a day's Low breaches entry_price * (1 - STOP_LOSS_PCT), regardless
+of the SMA. Tested OOS (2022-2026): barely changes returns (median CAGR
+4.88% -> 4.91%) but caps the worst single-trade loss from -14.14% to
+-5.10% and lifts the whitelist's win count. See VPA_DIAGNOSIS.md for the
+full numbers.
 """
 import pandas as pd
 import numpy as np
@@ -20,21 +26,66 @@ from vpa_etf_daily import get_daily_data, ALL_ETFS, COST_PER_TRADE, INITIAL_EQUI
 # =========================
 START_DATE = '2010-01-01'
 SMA_LEN = 200
+STOP_LOSS_PCT = 0.05        # hard stop: exit if price falls 5% below entry, regardless of SMA
 CASH_YIELD_ANNUAL = 0.045   # approx. T-bill yield; cash is not actually zero-return
 CASH_DAILY = (1 + CASH_YIELD_ANNUAL) ** (1 / 252) - 1
 
 
 def backtest_trend_timing(df, sma_len=SMA_LEN, cost=COST_PER_TRADE,
-                           cash_yield_daily=CASH_DAILY, initial_equity=INITIAL_EQUITY):
+                           cash_yield_daily=CASH_DAILY, initial_equity=INITIAL_EQUITY,
+                           stop_loss_pct=STOP_LOSS_PCT):
+    """Path-dependent day-by-day simulation (not vectorized) because the hard
+    stop needs to check each day's Low against the actual entry price, which
+    a vectorized cumulative-product can't express."""
     d = df.copy()
     d['SMA'] = d['Close'].rolling(sma_len).mean()
     d['Uptrend'] = d['Close'] > d['SMA']
-    d = d.dropna(subset=['SMA'])
-    d['Ret'] = d['Close'].pct_change().fillna(0.0)
-    d['Pos'] = d['Uptrend'].shift(1).fillna(False).astype(int)  # act on yesterday's signal
-    d['PosChange'] = d['Pos'].diff().abs().fillna(0)
-    d['PnL'] = np.where(d['Pos'] == 1, d['Ret'], cash_yield_daily) - d['PosChange'] * cost
-    d['Equity'] = (1 + d['PnL']).cumprod() * initial_equity
+    d = d.dropna(subset=['SMA']).copy()
+
+    closes = d['Close'].values
+    lows = d['Low'].values
+    uptrend = d['Uptrend'].values
+    n = len(d)
+
+    equity = np.empty(n)
+    pnl_arr = np.zeros(n)
+    pos_arr = np.zeros(n, dtype=int)
+    equity[0] = initial_equity
+    in_pos = False
+    entry_price = None
+
+    for i in range(1, n):
+        prev_signal = uptrend[i - 1]  # act on yesterday's signal, no lookahead
+        pnl = 0.0
+        exited = False
+
+        if in_pos:
+            if stop_loss_pct is not None and lows[i] <= entry_price * (1 - stop_loss_pct):
+                stop_price = entry_price * (1 - stop_loss_pct)
+                pnl = (stop_price / closes[i - 1] - 1.0) - cost
+                in_pos = False
+                exited = True
+            else:
+                pnl = closes[i] / closes[i - 1] - 1.0
+                if not prev_signal:
+                    pnl -= cost
+                    in_pos = False
+                    exited = True
+        else:
+            pnl = cash_yield_daily
+
+        if not in_pos and not exited and prev_signal:
+            in_pos = True
+            entry_price = closes[i]
+            pnl -= cost
+
+        pos_arr[i] = 1 if in_pos else 0
+        pnl_arr[i] = pnl
+        equity[i] = equity[i - 1] * (1 + pnl)
+
+    d['Pos'] = pos_arr
+    d['PnL'] = pnl_arr
+    d['Equity'] = equity
     return d
 
 
@@ -119,18 +170,26 @@ def get_beats_bh_whitelist(symbols=None, start=START_DATE, metric_start='2022-01
 
 
 # Regenerate with get_beats_bh_whitelist() periodically -- OOS edge can decay.
-# Built from 2022-2026 out-of-sample validation (see VPA_DIAGNOSIS.md).
+# Built from 2022-2026 out-of-sample validation WITH the 5% hard stop-loss
+# active (see VPA_DIAGNOSIS.md). Rebuilding after adding the stop changed
+# membership vs the no-stop version: EWJ, HACK, and QQQ dropped out; nothing
+# new was added -- always regenerate under the exact rules you intend to trade.
 BEATS_BH_WHITELIST = [
-    'AGG', 'ARKW', 'BND', 'BOTZ', 'EEM', 'EFA', 'EWJ', 'FXI', 'HACK', 'HYG',
-    'ICLN', 'IEMG', 'IWM', 'LIT', 'LQD', 'MUB', 'QQQ', 'SHY', 'TIP', 'VEA', 'XLC',
+    'AGG', 'ARKW', 'BND', 'BOTZ', 'EEM', 'EFA', 'FXI', 'HYG', 'ICLN', 'IEMG',
+    'IWM', 'LIT', 'LQD', 'MUB', 'SHY', 'TIP', 'VEA', 'XLC',
 ]
 
 
-def scan_buy_signals_only(symbols=None):
+def scan_buy_signals_only(symbols=None, stop_loss_pct=STOP_LOSS_PCT):
     """Only post what's actually actionable: symbols with a validated
     (profitable, beats-B&H) edge that are CURRENTLY in a BUY state. Nothing
     else gets printed -- no short signals, no "sitting in cash" calls, no
-    unvalidated symbols."""
+    unvalidated symbols.
+
+    This scanner has no record of your actual fill price, so it can't track
+    a live stop for you -- it prints the stop level you'd set *if you buy
+    today*. If you already hold a position from an earlier signal, your
+    stop is 5% below YOUR entry price, not today's price."""
     symbols = symbols or BEATS_BH_WHITELIST
     print(f"\n{'=' * 60}")
     print(f"  BUY SIGNALS ONLY - validated vs buy-and-hold - {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}")
@@ -145,7 +204,9 @@ def scan_buy_signals_only(symbols=None):
             d['SMA'] = d['Close'].rolling(SMA_LEN).mean()
             last = d.iloc[-1]
             if last['Close'] > last['SMA']:  # BUY state only; CASH state is not posted
-                print(f"  BUY  {sym:6s} | ${last['Close']:.2f} | SMA200=${last['SMA']:.2f}")
+                stop_price = last['Close'] * (1 - stop_loss_pct)
+                print(f"  BUY  {sym:6s} | ${last['Close']:.2f} | SMA200=${last['SMA']:.2f} | "
+                      f"stop if bought today=${stop_price:.2f} (-{stop_loss_pct*100:.0f}%)")
                 posted += 1
         except Exception:
             continue

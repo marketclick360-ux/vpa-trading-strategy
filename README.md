@@ -29,11 +29,14 @@ signals are net-negative and should not be traded. `vpa_coulling.py` and
 `vpa_etf_daily.py` are still useful as anomaly *scanners* for awareness, but
 not as mechanical trading signals.
 
-**`vpa_trend_timing.py`** (SMA-200 trend timing, cash at T-bill yield when
-flat) is the validated risk-managed alternative — it trails buy-and-hold on
-raw CAGR in the tested 2022–2026 bull-market window but matches or beats it
-on ~47% of symbols individually with meaningfully lower drawdown on ~85% of
-them. See `VPA_DIAGNOSIS.md` §5 for numbers.
+**`vpa_trend_timing.py`** (SMA-200 trend timing + a hard 5% stop-loss, cash
+at T-bill yield when flat) is the validated risk-managed alternative — it
+trails buy-and-hold on raw CAGR in the tested 2022–2026 bull-market window
+but matches or beats it on many symbols individually with meaningfully
+lower drawdown, and the stop caps worst-case single-trade loss at -5%
+(down from -14% without it). See `VPA_DIAGNOSIS.md` §5 and §7 for numbers.
+A Chaikin Money Flow "accumulation" signal was also tested (§6) and
+rejected — too much whipsaw, no net benefit.
 
 ### What gets posted / traded right now
 
