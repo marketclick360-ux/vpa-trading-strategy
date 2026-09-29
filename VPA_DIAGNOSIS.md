@@ -360,24 +360,131 @@ split to stay listed). A diversified index can't disappear; a single
 company can. This is a different risk than leverage and doesn't go away
 by staying at 1x.
 
+## 14. Value + quality factor investing — live screener only, not backtested
+
+A different mechanism from everything above: instead of timing entries on
+price/volume, select stocks by fundamentals (cheapness + quality) — the
+approach Benjamin Graham popularized and modern factor research (e.g.
+Asness, Frazzini & Pedersen's "Quality Minus Junk") has substantiated.
+
+**Why this isn't validated like the price-based strategies:** every other
+strategy in this document was tested on 20-50 years of real price/volume
+history, free via yfinance. A value/quality strategy needs historical
+*fundamentals* (P/E, ROE, debt) as they actually looked years ago — that
+requires a paid point-in-time data provider (Compustat, Sharadar, SimFin).
+yfinance only exposes *current* fundamentals, so there is no way to
+backtest this the way price-based strategies were backtested here.
+
+**Shipped: `vpa_value_quality_screener.py`** — a live snapshot ranking
+today's fundamentals by a Magic Formula-style composite (Greenblatt,
+*The Little Book That Beats the Market*, 2005): combined rank of earnings
+yield (1/P-E, cheapness) and ROE (quality), across a ~59-symbol
+diversified large-cap universe. This has the same status as
+`vpa_coulling.py`'s anomaly scanner: informational only, not a trading
+signal, no stop-loss or exit rule defined, no proof it beats buy-and-hold.
+
+**A user-supplied paper** ("Quant Convergence: Bridging Classical Value
+Investing and Modern Factor Models," Yamazaki & Garrido-Lestache
+Belinchon, 2026) claimed a pure-Graham Random Forest returned 232.13%
+against SPY's 68.00% over a March 2022–March 2026 out-of-sample test,
+p=0.098. Read in full before building anything from it — the headline
+number should **not** be treated as validation, for reasons that echo
+mistakes made elsewhere in this document:
+
+1. **Single static basket, no rebalancing.** 20 stocks bought once and
+   held unchanged for 4 years. The entire result rides on which 20
+   companies got picked on that one date — a sample size of one draw, not
+   a repeatable process. If a couple of the 20 caught the 2023-2025 AI
+   rally, that alone could explain the outperformance.
+2. **Single test window — the same 2022-2026 window used throughout this
+   document**, which §8 already showed is a historically unusual period
+   where multiple unrelated strategies "won" and then failed in every
+   other period tested. No walk-forward across independent windows was
+   done.
+3. **Statistical significance is marginal and reframed.** p=0.098 clears
+   only a relaxed α=0.10 threshold (adopted specifically because it
+   doesn't clear the standard 0.05), then the conclusion calls this
+   "proving with over 90% confidence" — overselling a borderline result.
+4. **Likely look-ahead bias.** The paper trained on "yfinance...trailing
+   fundamental snapshots" across a 2006-2022 window. yfinance only
+   exposes *current* fundamentals — the same limitation that blocks a
+   real backtest here. If today's known-good fundamentals leaked into
+   training examples from years ago, the model may have effectively been
+   told which companies turned out fine before making historical picks.
+
+**Conclusion: the conceptual thesis (fundamentals as a regularizer against
+momentum-chasing overfit) is credible and worth keeping in mind. The
+specific 232% figure is not validated and should not be treated as such.**
+Don't build a backtest-claiming-to-be-validated strategy from this paper's
+numbers without real point-in-time data and multi-period testing — the
+same discipline applied to everything else in this document.
+
+## 15. Point-in-time value + quality — the gap actually closed, real edge found
+
+The network policy that blocked `data.sec.gov` in §14 was lifted, which
+made a genuine fix possible: SEC EDGAR's XBRL API exposes real historical
+financial filings with their actual `filed` dates, not a present-day
+snapshot. This closes the exact hole in both §14's screener and the
+paper's methodology — a rebalance on, say, 2015-06-01 now only ever uses
+fundamentals that were genuinely public by that date.
+
+**Method:** annual rebalance (June 1, 2012–2025 — 14 independent decision
+points, not one static draw), same Magic Formula-style rank (earnings
+yield + ROE) as §14's screener, top 15 equal-weight, 0.1% cost per
+position change. Universe: the same ~59-symbol large-cap list, of which
+45 had usable SEC data.
+
+| | Point-in-time portfolio | SPY buy-and-hold |
+|---|---|---|
+| CAGR (2012-06 to 2026-09, 14.3yrs) | **21.70%** | 15.29% |
+| MaxDD | -34.73% | -33.72% |
+| Sharpe | **1.12** | 0.94 |
+
+This addresses every specific critique raised against the paper in §14:
+14 independent rebalances instead of one static basket, spanning 2018
+volatility, the 2020 crash, and the 2022 bear market instead of one
+cherry-picked window, and genuinely point-in-time fundamentals instead of
+a present-day snapshot. CAGR beats buy-and-hold by 6.4 points/year with
+essentially the same drawdown and a meaningfully better Sharpe ratio.
+
+**One honest limitation that remains:** the ~59-symbol candidate universe
+was chosen *today* (2026), so it excludes companies that went bankrupt or
+were delisted between 2012 and now — survivorship bias in the *candidate
+pool*, not in the selection process itself (which genuinely only used
+data available at each historical date). A fully rigorous version would
+use the actual historical S&P 500 constituent list at each rebalance date
+rather than a modern, curated list of well-known large caps.
+
+**Shipped: `vpa_value_quality_pointintime.py`.** This is a materially
+stronger result than anything else added after the original leveraged
+trend-timing work, and unlike §14's screener, this one is a real,
+validated backtest — not an informational-only live snapshot.
+
 ## Recommendation
 
 - **Do not trade the original VPA anomaly signal**, long/short or long-only,
   as configured. It is net-negative after realistic costs, and "improving"
   it via untested parameter tuning made it worse, not better.
-- **`vpa_leveraged_trend.py` (new, in this repo) is the actual answer to
-  "beat buy-and-hold"** — the only strategy in this document that did so on
-  real multi-decade history including two genuine bear markets, not just
-  the 2022-2026 recovery. Nine symbols total: QQQ (2x), XLK (3x), EFA (3x),
-  AAL/AMD/M/C/MU (unlevered — leverage hurts these, see §13), CSCO (2x via
-  margin). Same 200-day SMA entry and 5% hard stop throughout. This is the
-  maximum-profitability configuration per an explicit "don't care about
-  risk" instruction — real historical worst-case drawdowns run from -52%
-  (CSCO) to -88% (XLK), and the 6 individual stocks carry real
-  single-company risk (near-total wipeout in 2008 for AAL/C) that a
-  diversified fund doesn't. If risk tolerance changes, drop the ETFs to a
-  flat 2x (§12) for meaningfully better drawdown at a small CAGR cost on
-  XLK/EFA.
+- **`vpa_value_quality_pointintime.py` (§15) is the strongest result in
+  this document** — a real walk-forward backtest (14 independent annual
+  rebalances, 2012-2026) using genuine point-in-time SEC filings: 21.70%
+  CAGR vs. SPY's 15.29%, essentially matched drawdown, better Sharpe.
+  Unlike everything else here, this one selects *which stocks to own* by
+  fundamentals rather than timing entries/exits by price — a genuinely
+  different, complementary mechanism to the trend-timing strategies below.
+- **`vpa_leveraged_trend.py`** — the price/trend-based answer to "beat
+  buy-and-hold": the only *trend-timing* strategy in this document that
+  did so on real multi-decade history including two genuine bear markets,
+  not just the 2022-2026 recovery. Nine symbols total: QQQ (2x), XLK (3x),
+  EFA (3x), AAL/AMD/M/C/MU (unlevered — leverage hurts these, see §13),
+  CSCO (2x via margin). Same 200-day SMA entry and 5% hard stop
+  throughout. This is the maximum-profitability configuration per an
+  explicit "don't care about risk" instruction — real historical
+  worst-case drawdowns run from -52% (CSCO) to -88% (XLK), and the 6
+  individual stocks carry real single-company risk (near-total wipeout in
+  2008 for AAL/C) that a diversified fund doesn't. If risk tolerance
+  changes, drop the ETFs to a flat 2x (§12) for meaningfully better
+  drawdown at a small CAGR cost on XLK/EFA.
 - **`vpa_trend_timing.py`** (unleveraged, wider whitelist) is the
   risk-managed alternative: it trails buy-and-hold on raw CAGR in the
   2022-2026 window specifically, but delivers similar-to-competitive

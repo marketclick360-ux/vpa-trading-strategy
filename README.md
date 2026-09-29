@@ -29,7 +29,18 @@ signals are net-negative and should not be traded. `vpa_coulling.py` and
 `vpa_etf_daily.py` are still useful as anomaly *scanners* for awareness, but
 not as mechanical trading signals.
 
-**`vpa_leveraged_trend.py` is the strategy that actually beats buy-and-hold**
+**`vpa_value_quality_pointintime.py` is the strongest validated result in this
+repo** — a real walk-forward backtest (14 independent annual rebalances,
+2012-2026, using genuine SEC EDGAR filing dates, not a present-day snapshot):
+21.70% CAGR vs. SPY's 15.29%, essentially matched drawdown, better Sharpe
+(1.12 vs 0.94). Selects *which stocks to own* by fundamentals (Magic
+Formula-style: earnings yield + ROE) rather than timing entries by price —
+a different, complementary mechanism to everything else here. See
+`VPA_DIAGNOSIS.md` §14-15 for the full derivation, including a critique of
+a paper that inspired this and why its headline number shouldn't be trusted
+as-is.
+
+**`vpa_leveraged_trend.py` is the trend-timing strategy that beats buy-and-hold**
 — validated on 20-50 years of history including the dot-com bust and 2008
 (not just the recent bull market): 200-day SMA entry + 5% hard stop across
 9 symbols. QQQ (2x), XLK (3x), EFA (3x) — diversified funds, leverage
