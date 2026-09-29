@@ -309,6 +309,57 @@ margin on top of the 2x product or a different-index 3x substitute) is the
 more cost-efficient way to get this exposure versus borrowing on margin
 directly.
 
+## 13. Wider crash-prone asset search — 6 more individual stocks found,
+leverage behaves oppositely to the ETFs
+
+QQQ/XLK/EFA aren't special — they're 3 of 20 assets tested in §9 that
+happened to have catastrophic historical crashes. The same unmodified
+SMA-200+5%-stop rule was tested on 28 more individual stocks and sectors
+with 20+ years of history and known severe historical drawdowns (dot-com
+tech names, 2008-era financials, homebuilders, airlines, retail, REITs).
+6 passed the same profitable-and-beats-buy-and-hold screen:
+
+| Symbol | Strategy CAGR | Buy & Hold CAGR | Strategy MaxDD | B&H MaxDD | Edge |
+|---|---|---|---|---|---|
+| AAL (American Airlines) | +6.84% | **-5.86%** | -63.8% | -97.2% | +12.7pp |
+| AMD | +15.63% | +10.75% | -86.6% | -96.6% | +4.9pp |
+| M (Macy's) | +6.88% | +5.09% | -64.2% | -91.9% | +1.8pp |
+| C (Citigroup) | +7.93% | +6.35% | -69.3% | -98.0% | +1.6pp |
+| MU (Micron) | +18.71% | +18.14% | -77.4% | -98.3% | +0.6pp |
+| CSCO | +22.7% | +21.9% | -52.3% | -89.3% | +0.8pp |
+
+AAL is the standout: buy-and-hold airline investors *lost* money over 20
+years (multiple bankruptcies, 9/11, 2008, COVID), while the trend exit
+turned that into a positive return.
+
+**Leverage was then tested on these 6 (2x/3x via margin, since no
+dedicated leveraged single-stock product was confirmed for most of them)
+— and it behaves the OPPOSITE of the ETFs:**
+
+| Symbol | 1x CAGR | 2x CAGR | 3x CAGR |
+|---|---|---|---|
+| AAL | **7.3%** | -1.2% | -18.0% |
+| AMD | **16.2%** | 8.7% | -14.8% |
+| M | **7.5%** | 1.0% | -12.4% |
+| C | **8.6%** | 5.8% | -1.9% |
+| MU | **19.3%** | 14.5% | -8.6% |
+| CSCO | 22.7% | **30.8%** | 28.8% |
+
+5 of 6 get *worse* with leverage, sometimes catastrophically (AAL: +7.3%
+unlevered → -18.0% at 3x). Individual stocks are far noisier day-to-day
+than a diversified fund, and leveraged daily-reset compounding punishes
+that noise much harder than it does for QQQ/XLK/EFA. Only CSCO genuinely
+benefits from leverage. **Shipped: AAL/AMD/M/C/MU unlevered (1x), CSCO at
+2x via margin** (`vpa_leveraged_trend.py`, folded into the same portfolio
+and scanner as §12).
+
+**Real risk these carry that the ETFs don't:** these are single
+companies, not diversified funds. Citigroup and American Airlines both
+came close to being wiped out in 2008 (Citigroup did a 1-for-10 reverse
+split to stay listed). A diversified index can't disappear; a single
+company can. This is a different risk than leverage and doesn't go away
+by staying at 1x.
+
 ## Recommendation
 
 - **Do not trade the original VPA anomaly signal**, long/short or long-only,
@@ -317,12 +368,16 @@ directly.
 - **`vpa_leveraged_trend.py` (new, in this repo) is the actual answer to
   "beat buy-and-hold"** — the only strategy in this document that did so on
   real multi-decade history including two genuine bear markets, not just
-  the 2022-2026 recovery. QQQ at 2x, XLK and EFA at 3x, same 200-day SMA
-  entry and 5% hard stop throughout. This is the maximum-profitability
-  configuration per an explicit "don't care about risk" instruction — real
-  historical worst-case drawdowns are roughly -73% to -88%. If risk
-  tolerance changes, drop to a flat 2x everywhere (§12) for a meaningfully
-  better drawdown profile at a small CAGR cost on XLK/EFA.
+  the 2022-2026 recovery. Nine symbols total: QQQ (2x), XLK (3x), EFA (3x),
+  AAL/AMD/M/C/MU (unlevered — leverage hurts these, see §13), CSCO (2x via
+  margin). Same 200-day SMA entry and 5% hard stop throughout. This is the
+  maximum-profitability configuration per an explicit "don't care about
+  risk" instruction — real historical worst-case drawdowns run from -52%
+  (CSCO) to -88% (XLK), and the 6 individual stocks carry real
+  single-company risk (near-total wipeout in 2008 for AAL/C) that a
+  diversified fund doesn't. If risk tolerance changes, drop the ETFs to a
+  flat 2x (§12) for meaningfully better drawdown at a small CAGR cost on
+  XLK/EFA.
 - **`vpa_trend_timing.py`** (unleveraged, wider whitelist) is the
   risk-managed alternative: it trails buy-and-hold on raw CAGR in the
   2022-2026 window specifically, but delivers similar-to-competitive

@@ -30,13 +30,19 @@ signals are net-negative and should not be traded. `vpa_coulling.py` and
 not as mechanical trading signals.
 
 **`vpa_leveraged_trend.py` is the strategy that actually beats buy-and-hold**
-— validated on 20-30 years of history including the dot-com bust and 2008
-(not just the recent bull market): 200-day SMA entry + 5% hard stop on
-QQQ/XLK/EFA, leveraged 2x/3x per symbol (whichever tested higher). This is
-the maximum-profitability configuration; real historical worst-case
-drawdowns are roughly -73% to -88%. See `VPA_DIAGNOSIS.md` §9 and §12 for
-the full derivation and numbers, and §11 for why options (not leveraged
-ETFs/margin) were tested and rejected as the leverage mechanism.
+— validated on 20-50 years of history including the dot-com bust and 2008
+(not just the recent bull market): 200-day SMA entry + 5% hard stop across
+9 symbols. QQQ (2x), XLK (3x), EFA (3x) — diversified funds, leverage
+helps. AAL, AMD, M, C, MU (unlevered) and CSCO (2x via margin) — individual
+stocks found via a wider crash-prone-asset search; leverage *hurts* 5 of
+these 6, the opposite of the ETFs, and they carry real single-company risk
+(Citigroup and American Airlines both nearly went to zero in 2008) that a
+diversified fund doesn't. This is the maximum-profitability configuration
+per an explicit "don't care about risk" instruction; real historical
+worst-case drawdowns run from -52% to -88% depending on the symbol. See
+`VPA_DIAGNOSIS.md` §9, §12, and §13 for the full derivation and numbers,
+and §11 for why options (not leveraged ETFs/margin) were tested and
+rejected as the leverage mechanism.
 
 **`vpa_trend_timing.py`** (SMA-200 trend timing + a hard 5% stop-loss, cash
 at T-bill yield when flat, unleveraged, wider whitelist) is the risk-managed

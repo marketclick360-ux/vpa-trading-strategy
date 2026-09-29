@@ -50,16 +50,26 @@ CASH_DAILY = (1 + CASH_YIELD_ANNUAL) ** (1 / 252) - 1
 LEV_ETF_EXPENSE = 0.0095    # ~0.95%/yr, typical leveraged-ETF expense ratio
 LEV_ETF_FINANCING_SPREAD = 0.01
 
-# Per-symbol leverage set to whichever of 2x/3x tested higher CAGR on full
-# history -- QQQ gets WORSE at 3x (volatility decay erases the gain and adds
-# drawdown), XLK and EFA get BETTER at 3x. Chosen for maximum profitability
-# per the user's explicit "don't care about risk" instruction -- see
-# VPA_DIAGNOSIS.md SS8 for the 2x-vs-3x comparison and the drawdown this
-# implies (worst historical case: QQQ -73%, XLK -88%, EFA -70%).
+# Per-symbol leverage set to whichever tested higher CAGR on full history.
+# QQQ/XLK/EFA are diversified funds -- see VPA_DIAGNOSIS.md SS8 for the
+# 2x-vs-3x comparison. The 6 individual stocks below are a SEPARATE later
+# finding (SS13): leverage helps CSCO but actively HURTS the other five --
+# single-stock volatility decay is much more punishing than a diversified
+# fund's, so AAL/AMD/M/C/MU are traded UNLEVERED (1x) even though they
+# passed the same beats-buy-and-hold screen. These five also carry real
+# single-company risk a diversified fund doesn't (Citigroup and American
+# Airlines both came close to zero in 2008) -- that's a different risk
+# than leverage and doesn't go away by staying at 1x.
 LEVERAGE = {
     'QQQ': 2.0,
     'XLK': 3.0,
     'EFA': 3.0,
+    'AAL': 1.0,
+    'AMD': 1.0,
+    'M': 1.0,
+    'C': 1.0,
+    'MU': 1.0,
+    'CSCO': 2.0,
 }
 
 # Signal computed on the underlying; live execution via the mapped leveraged
@@ -69,10 +79,19 @@ LEVERAGE = {
 # underlying's exact benchmark. No listed 3x product tracks these exactly;
 # 3x exposure means either margin on the 2x product or a generic 3x
 # tech/international leveraged ETF -- confirm the real product before use.
+# 'DIRECT' means buy the stock itself (1x, no leverage product needed);
+# 'MARGIN' means no dedicated leveraged single-stock product was confirmed,
+# so 2x there means margin on the stock itself, not a named ETF ticker.
 LEVERAGED_PRODUCT = {
-    'QQQ': 'QLD',   # ProShares Ultra QQQ (2x Nasdaq-100)
-    'XLK': 'ROM',   # ProShares Ultra Technology (2x tech) -- 3x needs margin on top, or TECL (3x, different index)
-    'EFA': 'EFO',   # ProShares Ultra MSCI EAFE (2x developed intl) -- 3x needs margin on top, no clean 3x EAFE product
+    'QQQ': 'QLD',    # ProShares Ultra QQQ (2x Nasdaq-100)
+    'XLK': 'ROM',    # ProShares Ultra Technology (2x tech) -- 3x needs margin on top, or TECL (3x, different index)
+    'EFA': 'EFO',    # ProShares Ultra MSCI EAFE (2x developed intl) -- 3x needs margin on top, no clean 3x EAFE product
+    'AAL': 'DIRECT',
+    'AMD': 'DIRECT',
+    'M': 'DIRECT',
+    'C': 'DIRECT',
+    'MU': 'DIRECT',
+    'CSCO': 'MARGIN',  # no confirmed dedicated 2x CSCO product -- 2x means margin on the stock itself
 }
 SYMBOLS = list(LEVERAGED_PRODUCT.keys())
 
@@ -196,7 +215,13 @@ def scan_buy_signals_only(symbols=None, stop_loss_pct=STOP_LOSS_PCT):
                 stop_price = last['Close'] * (1 - stop_loss_pct)
                 product = LEVERAGED_PRODUCT[sym]
                 lev = LEVERAGE[sym]
-                print(f"  BUY  {sym:6s} at {lev:.0f}x (via {product}) | ${last['Close']:.2f} | SMA200=${last['SMA']:.2f} | "
+                if product == 'DIRECT':
+                    via = f"direct, {sym} shares"
+                elif product == 'MARGIN':
+                    via = f"{lev:.0f}x via margin on {sym} (no dedicated leveraged product)"
+                else:
+                    via = f"{lev:.0f}x via {product}"
+                print(f"  BUY  {sym:6s} ({via}) | ${last['Close']:.2f} | SMA200=${last['SMA']:.2f} | "
                       f"stop if bought today=${stop_price:.2f} (-{stop_loss_pct*100:.0f}% on {sym})")
                 posted += 1
         except Exception:
@@ -207,11 +232,11 @@ def scan_buy_signals_only(symbols=None, stop_loss_pct=STOP_LOSS_PCT):
 
 
 def main():
-    print("Leveraged Trend Timing -- QQQ / XLK / EFA")
-    print("The only strategy this session validated as beating buy-and-hold")
-    print("on real multi-decade history including the dot-com bust and 2008.")
-    print("See VPA_DIAGNOSIS.md SS7-SS8 for the full derivation.\n")
-    evaluate(label="(full history, 20-30yrs incl. dot-com + GFC)")
+    print("Trend Timing Portfolio -- QQQ/XLK/EFA (leveraged) + AAL/AMD/M/C/MU/CSCO (stocks)")
+    print("Validated beating buy-and-hold on real multi-decade history")
+    print("including the dot-com bust and 2008, not just the recent bull run.")
+    print("See VPA_DIAGNOSIS.md SS7-SS8 (ETFs) and SS13 (stocks) for the full derivation.\n")
+    evaluate(label="(full history, 20-50yrs incl. dot-com + GFC)")
     scan_buy_signals_only()
 
 
