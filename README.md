@@ -35,6 +35,19 @@ raw CAGR in the tested 2022–2026 bull-market window but matches or beats it
 on ~47% of symbols individually with meaningfully lower drawdown on ~85% of
 them. See `VPA_DIAGNOSIS.md` §5 for numbers.
 
+### What gets posted / traded right now
+
+Only long ("buy") signals are surfaced anywhere in this repo — no short
+signals are printed or traded by any script, since the short side showed no
+real edge (see `VPA_DIAGNOSIS.md` §1–2). On top of that,
+`vpa_trend_timing.scan_buy_signals_only()` further restricts to a whitelist
+of symbols (`BEATS_BH_WHITELIST`) that were both **profitable and ahead of
+buy-and-hold** out-of-sample — it only prints a symbol when it's currently
+in a BUY state *and* on that whitelist. Nothing else gets posted: no short
+alerts, no "sitting in cash" calls, no unvalidated symbols. Regenerate the
+whitelist periodically with `get_beats_bh_whitelist()` — an OOS edge can
+decay over time.
+
 ## Quick Start
 
 ```bash

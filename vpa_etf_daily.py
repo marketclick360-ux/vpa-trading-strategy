@@ -133,8 +133,11 @@ def calc_metrics(data, trades, symbol, mode):
 # TODAY'S SCANNER
 # =========================
 def scan_today(symbols):
+    """Buy-side alerts only -- bearish/short anomalies are not posted. See
+    VPA_DIAGNOSIS.md: the short side showed no real edge and should not be
+    traded."""
     print(f"\n{'='*70}")
-    print(f"  VPA DAILY ETF SCANNER  |  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"  VPA DAILY ETF BUY SCANNER  |  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'='*70}")
     alerts = []
     clean  = []
@@ -146,12 +149,9 @@ def scan_today(symbols):
             df = detect_vpa_anomalies(df)
             last = df.iloc[-1]
             sigs = []
-            if last['Anomaly_FakeUp']:     sigs.append('FAKE UP   (bearish reversal)')
             if last['Anomaly_FakeDown']:   sigs.append('FAKE DOWN (bullish reversal)')
-            if last['Anomaly_AbsorbUp']:   sigs.append('ABSORB UP   (bearish absorption)')
             if last['Anomaly_AbsorbDown']: sigs.append('ABSORB DOWN (bullish absorption)')
             if last['Confirm_Up']:         sigs.append('CONFIRM UP   (trend continuation)')
-            if last['Confirm_Down']:       sigs.append('CONFIRM DOWN (trend continuation)')
             price = last['Close']
             vol   = int(last['Volume'])
             if sigs:
@@ -185,10 +185,9 @@ def backtest_all(symbols):
             if len(df) < LOOKBACK_WINDOW + 10:
                 continue
             df = detect_vpa_anomalies(df)
-            for mode in ('long_only', 'long_short'):
-                data, trades = backtest_vpa(df, mode=mode)
-                r = calc_metrics(data, trades, sym, mode)
-                results.append(r)
+            data, trades = backtest_vpa(df, mode='long_only')
+            r = calc_metrics(data, trades, sym, 'long_only')
+            results.append(r)
         except Exception as e:
             print(f"  {sym}: ERROR - {e}")
     return pd.DataFrame(results)
@@ -210,14 +209,8 @@ def main():
     print("\n" + "="*90)
     print("  BACKTEST SUMMARY (Daily | Long-Only) - Sorted by CAGR")
     print("="*90)
-    lo = results_df[results_df['Mode'] == 'long_only'].sort_values('CAGR', ascending=False)
+    lo = results_df.sort_values('CAGR', ascending=False)
     print(lo[['Symbol','Trades','TotalRet','CAGR','Sharpe','MaxDD','BH_Ret','BH_CAGR']].to_string(index=False))
-
-    print("\n" + "="*90)
-    print("  BACKTEST SUMMARY (Daily | Long-Short) - Sorted by CAGR")
-    print("="*90)
-    ls = results_df[results_df['Mode'] == 'long_short'].sort_values('CAGR', ascending=False)
-    print(ls[['Symbol','Trades','TotalRet','CAGR','Sharpe','MaxDD','BH_Ret','BH_CAGR']].to_string(index=False))
 
     # 4. SAVE
     results_df.to_csv('vpa_etf_backtest.csv', index=False)

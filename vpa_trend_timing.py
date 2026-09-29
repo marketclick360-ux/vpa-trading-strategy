@@ -105,23 +105,52 @@ def evaluate(symbols, start=START_DATE, metric_start=None, label=""):
     return res
 
 
-def scan_today(symbols):
+def get_beats_bh_whitelist(symbols=None, start=START_DATE, metric_start='2022-01-01'):
+    """Symbols where trend-timing is BOTH profitable AND ahead of buy-and-hold
+    out-of-sample. Excludes cases that only "win" because both strategy and
+    B&H lost money and the strategy merely lost less (e.g. VIXY, TLT, UNG in
+    the 2022-2026 test window) -- that is not a buy signal."""
+    symbols = symbols or ALL_ETFS
+    res = evaluate(symbols, start=start, metric_start=metric_start, label="(whitelist build)")
+    if len(res) == 0:
+        return []
+    winners = res[(res['strat_cagr'] > 0) & (res['strat_cagr'] > res['bh_cagr'])]
+    return sorted(winners['symbol'].tolist())
+
+
+# Regenerate with get_beats_bh_whitelist() periodically -- OOS edge can decay.
+# Built from 2022-2026 out-of-sample validation (see VPA_DIAGNOSIS.md).
+BEATS_BH_WHITELIST = [
+    'AGG', 'ARKW', 'BND', 'BOTZ', 'EEM', 'EFA', 'EWJ', 'FXI', 'HACK', 'HYG',
+    'ICLN', 'IEMG', 'IWM', 'LIT', 'LQD', 'MUB', 'QQQ', 'SHY', 'TIP', 'VEA', 'XLC',
+]
+
+
+def scan_buy_signals_only(symbols=None):
+    """Only post what's actually actionable: symbols with a validated
+    (profitable, beats-B&H) edge that are CURRENTLY in a BUY state. Nothing
+    else gets printed -- no short signals, no "sitting in cash" calls, no
+    unvalidated symbols."""
+    symbols = symbols or BEATS_BH_WHITELIST
     print(f"\n{'=' * 60}")
-    print(f"  TREND-TIMING SCANNER - {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"  BUY SIGNALS ONLY - validated vs buy-and-hold - {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'=' * 60}")
+    posted = 0
     for sym in symbols:
         try:
             df = get_daily_data(sym, '2023-01-01')
             if len(df) < SMA_LEN + 5:
-                print(f"  {sym:6s} | insufficient history for {SMA_LEN}d SMA")
                 continue
             d = df.copy()
             d['SMA'] = d['Close'].rolling(SMA_LEN).mean()
             last = d.iloc[-1]
-            state = "LONG (above SMA200)" if last['Close'] > last['SMA'] else "CASH (below SMA200)"
-            print(f"  {sym:6s} | ${last['Close']:.2f} | SMA200=${last['SMA']:.2f} | {state}")
-        except Exception as e:
-            print(f"  {sym:6s} | ERROR: {e}")
+            if last['Close'] > last['SMA']:  # BUY state only; CASH state is not posted
+                print(f"  BUY  {sym:6s} | ${last['Close']:.2f} | SMA200=${last['SMA']:.2f}")
+                posted += 1
+        except Exception:
+            continue
+    if posted == 0:
+        print("  No validated symbols are currently in a BUY state.")
     print(f"{'=' * 60}\n")
 
 
@@ -135,7 +164,7 @@ def main():
     print("\n--- Out-of-sample test (metrics measured 2022-01-01 onward only) ---")
     evaluate(ALL_ETFS, start=START_DATE, metric_start='2022-01-01', label="(OOS)")
 
-    scan_today(['SPY', 'QQQ', 'IWM', 'EFA', 'EEM', 'IEF', 'TLT', 'GLD', 'AAPL', 'MSFT', 'NVDA'])
+    scan_buy_signals_only()
 
 
 if __name__ == '__main__':

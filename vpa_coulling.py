@@ -172,8 +172,11 @@ def calc_metrics(data, trades, label="VPA Strategy"):
 # LIVE SCANNER
 # =========================
 def scan_for_anomalies_today(symbols):
+    """Buy-side signals only -- bearish/short anomalies are detected (see
+    detect_vpa_anomalies) but not posted here. See VPA_DIAGNOSIS.md: the
+    short side showed no real edge and should not be traded."""
     print(f"\n{'='*60}")
-    print(f"  VPA ANOMALY SCANNER - {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"  VPA BUY SCANNER - {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'='*60}")
 
     for sym in symbols:
@@ -183,21 +186,16 @@ def scan_for_anomalies_today(symbols):
             last = df.iloc[-1]
 
             signals = []
-            if last['Anomaly_FakeUp']:
-                signals.append("FAKE UP (bearish)")
             if last['Anomaly_FakeDown']:
                 signals.append("FAKE DOWN (bullish)")
-            if last['Anomaly_AbsorbUp']:
-                signals.append("ABSORB UP (bearish)")
             if last['Anomaly_AbsorbDown']:
                 signals.append("ABSORB DOWN (bullish)")
             if last['Confirm_Up']:
                 signals.append("CONFIRMED UP")
-            if last['Confirm_Down']:
-                signals.append("CONFIRMED DOWN")
 
-            status = ', '.join(signals) if signals else "-- no anomaly"
-            print(f"  {sym:6s} | ${last['Close']:.2f} | {status}")
+            if signals:
+                status = ', '.join(signals)
+                print(f"  {sym:6s} | ${last['Close']:.2f} | {status}")
         except Exception as e:
             print(f"  {sym:6s} | ERROR: {e}")
 
@@ -214,13 +212,9 @@ def main():
 
     df = detect_vpa_anomalies(df)
 
-    # Backtest long-only
+    # Backtest long-only (short side dropped -- see VPA_DIAGNOSIS.md)
     data_long, trades_long = backtest_vpa(df, mode='long_only')
     calc_metrics(data_long, trades_long, label=f"VPA Long-Only ({SYMBOL})")
-
-    # Backtest long-short
-    data_ls, trades_ls = backtest_vpa(df, mode='long_short')
-    calc_metrics(data_ls, trades_ls, label=f"VPA Long-Short ({SYMBOL})")
 
     # Buy and hold comparison
     bh_ret = df['Close'].iloc[-1] / df['Close'].iloc[0] - 1.0
