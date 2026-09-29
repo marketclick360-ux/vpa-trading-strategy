@@ -20,6 +20,21 @@ A Python implementation of Anna Coulling's Volume Price Analysis (VPA) anomaly d
 | Confirm Up | Wide spread UP + HIGH volume | Trend continuation |
 | Confirm Down | Wide spread DOWN + HIGH volume | Trend continuation |
 
+## ⚠️ Validation status (read before trading any of this)
+
+The VPA anomaly signal below was walk-forward tested and does **not** show
+a durable edge — see [`VPA_DIAGNOSIS.md`](./VPA_DIAGNOSIS.md) for the full
+trade-level audit (2,700+ trades, out-of-sample validation). Short-side
+signals are net-negative and should not be traded. `vpa_coulling.py` and
+`vpa_etf_daily.py` are still useful as anomaly *scanners* for awareness, but
+not as mechanical trading signals.
+
+**`vpa_trend_timing.py`** (SMA-200 trend timing, cash at T-bill yield when
+flat) is the validated risk-managed alternative — it trails buy-and-hold on
+raw CAGR in the tested 2022–2026 bull-market window but matches or beats it
+on ~47% of symbols individually with meaningfully lower drawdown on ~85% of
+them. See `VPA_DIAGNOSIS.md` §5 for numbers.
+
 ## Quick Start
 
 ```bash
