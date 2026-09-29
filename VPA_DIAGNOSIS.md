@@ -360,6 +360,65 @@ split to stay listed). A diversified index can't disappear; a single
 company can. This is a different risk than leverage and doesn't go away
 by staying at 1x.
 
+## 14. Value + quality factor investing — live screener only, not backtested
+
+A different mechanism from everything above: instead of timing entries on
+price/volume, select stocks by fundamentals (cheapness + quality) — the
+approach Benjamin Graham popularized and modern factor research (e.g.
+Asness, Frazzini & Pedersen's "Quality Minus Junk") has substantiated.
+
+**Why this isn't validated like the price-based strategies:** every other
+strategy in this document was tested on 20-50 years of real price/volume
+history, free via yfinance. A value/quality strategy needs historical
+*fundamentals* (P/E, ROE, debt) as they actually looked years ago — that
+requires a paid point-in-time data provider (Compustat, Sharadar, SimFin).
+yfinance only exposes *current* fundamentals, so there is no way to
+backtest this the way price-based strategies were backtested here.
+
+**Shipped: `vpa_value_quality_screener.py`** — a live snapshot ranking
+today's fundamentals by a Magic Formula-style composite (Greenblatt,
+*The Little Book That Beats the Market*, 2005): combined rank of earnings
+yield (1/P-E, cheapness) and ROE (quality), across a ~59-symbol
+diversified large-cap universe. This has the same status as
+`vpa_coulling.py`'s anomaly scanner: informational only, not a trading
+signal, no stop-loss or exit rule defined, no proof it beats buy-and-hold.
+
+**A user-supplied paper** ("Quant Convergence: Bridging Classical Value
+Investing and Modern Factor Models," Yamazaki & Garrido-Lestache
+Belinchon, 2026) claimed a pure-Graham Random Forest returned 232.13%
+against SPY's 68.00% over a March 2022–March 2026 out-of-sample test,
+p=0.098. Read in full before building anything from it — the headline
+number should **not** be treated as validation, for reasons that echo
+mistakes made elsewhere in this document:
+
+1. **Single static basket, no rebalancing.** 20 stocks bought once and
+   held unchanged for 4 years. The entire result rides on which 20
+   companies got picked on that one date — a sample size of one draw, not
+   a repeatable process. If a couple of the 20 caught the 2023-2025 AI
+   rally, that alone could explain the outperformance.
+2. **Single test window — the same 2022-2026 window used throughout this
+   document**, which §8 already showed is a historically unusual period
+   where multiple unrelated strategies "won" and then failed in every
+   other period tested. No walk-forward across independent windows was
+   done.
+3. **Statistical significance is marginal and reframed.** p=0.098 clears
+   only a relaxed α=0.10 threshold (adopted specifically because it
+   doesn't clear the standard 0.05), then the conclusion calls this
+   "proving with over 90% confidence" — overselling a borderline result.
+4. **Likely look-ahead bias.** The paper trained on "yfinance...trailing
+   fundamental snapshots" across a 2006-2022 window. yfinance only
+   exposes *current* fundamentals — the same limitation that blocks a
+   real backtest here. If today's known-good fundamentals leaked into
+   training examples from years ago, the model may have effectively been
+   told which companies turned out fine before making historical picks.
+
+**Conclusion: the conceptual thesis (fundamentals as a regularizer against
+momentum-chasing overfit) is credible and worth keeping in mind. The
+specific 232% figure is not validated and should not be treated as such.**
+Don't build a backtest-claiming-to-be-validated strategy from this paper's
+numbers without real point-in-time data and multi-period testing — the
+same discipline applied to everything else in this document.
+
 ## Recommendation
 
 - **Do not trade the original VPA anomaly signal**, long/short or long-only,
