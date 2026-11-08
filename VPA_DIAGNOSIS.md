@@ -360,32 +360,291 @@ split to stay listed). A diversified index can't disappear; a single
 company can. This is a different risk than leverage and doesn't go away
 by staying at 1x.
 
+## 14. Value + quality factor investing — live screener only, not backtested
+
+A different mechanism from everything above: instead of timing entries on
+price/volume, select stocks by fundamentals (cheapness + quality) — the
+approach Benjamin Graham popularized and modern factor research (e.g.
+Asness, Frazzini & Pedersen's "Quality Minus Junk") has substantiated.
+
+**Why this isn't validated like the price-based strategies:** every other
+strategy in this document was tested on 20-50 years of real price/volume
+history, free via yfinance. A value/quality strategy needs historical
+*fundamentals* (P/E, ROE, debt) as they actually looked years ago — that
+requires a paid point-in-time data provider (Compustat, Sharadar, SimFin).
+yfinance only exposes *current* fundamentals, so there is no way to
+backtest this the way price-based strategies were backtested here.
+
+**Shipped: `vpa_value_quality_screener.py`** — a live snapshot ranking
+today's fundamentals by a Magic Formula-style composite (Greenblatt,
+*The Little Book That Beats the Market*, 2005): combined rank of earnings
+yield (1/P-E, cheapness) and ROE (quality), across a ~59-symbol
+diversified large-cap universe. This has the same status as
+`vpa_coulling.py`'s anomaly scanner: informational only, not a trading
+signal, no stop-loss or exit rule defined, no proof it beats buy-and-hold.
+
+**A user-supplied paper** ("Quant Convergence: Bridging Classical Value
+Investing and Modern Factor Models," Yamazaki & Garrido-Lestache
+Belinchon, 2026) claimed a pure-Graham Random Forest returned 232.13%
+against SPY's 68.00% over a March 2022–March 2026 out-of-sample test,
+p=0.098. Read in full before building anything from it — the headline
+number should **not** be treated as validation, for reasons that echo
+mistakes made elsewhere in this document:
+
+1. **Single static basket, no rebalancing.** 20 stocks bought once and
+   held unchanged for 4 years. The entire result rides on which 20
+   companies got picked on that one date — a sample size of one draw, not
+   a repeatable process. If a couple of the 20 caught the 2023-2025 AI
+   rally, that alone could explain the outperformance.
+2. **Single test window — the same 2022-2026 window used throughout this
+   document**, which §8 already showed is a historically unusual period
+   where multiple unrelated strategies "won" and then failed in every
+   other period tested. No walk-forward across independent windows was
+   done.
+3. **Statistical significance is marginal and reframed.** p=0.098 clears
+   only a relaxed α=0.10 threshold (adopted specifically because it
+   doesn't clear the standard 0.05), then the conclusion calls this
+   "proving with over 90% confidence" — overselling a borderline result.
+4. **Likely look-ahead bias.** The paper trained on "yfinance...trailing
+   fundamental snapshots" across a 2006-2022 window. yfinance only
+   exposes *current* fundamentals — the same limitation that blocks a
+   real backtest here. If today's known-good fundamentals leaked into
+   training examples from years ago, the model may have effectively been
+   told which companies turned out fine before making historical picks.
+
+**Conclusion: the conceptual thesis (fundamentals as a regularizer against
+momentum-chasing overfit) is credible and worth keeping in mind. The
+specific 232% figure is not validated and should not be treated as such.**
+Don't build a backtest-claiming-to-be-validated strategy from this paper's
+numbers without real point-in-time data and multi-period testing — the
+same discipline applied to everything else in this document.
+
+## 15. Point-in-time value + quality — the gap actually closed, real edge found
+
+The network policy that blocked `data.sec.gov` in §14 was lifted, which
+made a genuine fix possible: SEC EDGAR's XBRL API exposes real historical
+financial filings with their actual `filed` dates, not a present-day
+snapshot. This closes the exact hole in both §14's screener and the
+paper's methodology — a rebalance on, say, 2015-06-01 now only ever uses
+fundamentals that were genuinely public by that date.
+
+**Method:** annual rebalance (June 1, 2012–2025 — 14 independent decision
+points, not one static draw), same Magic Formula-style rank (earnings
+yield + ROE) as §14's screener, top 15 equal-weight, 0.1% cost per
+position change. Universe: the same ~59-symbol large-cap list, of which
+45 had usable SEC data.
+
+| | Point-in-time portfolio | SPY buy-and-hold |
+|---|---|---|
+| CAGR (2012-06 to 2026-09, 14.3yrs) | **21.70%** | 15.29% |
+| MaxDD | -34.73% | -33.72% |
+| Sharpe | **1.12** | 0.94 |
+
+This addresses every specific critique raised against the paper in §14:
+14 independent rebalances instead of one static basket, spanning 2018
+volatility, the 2020 crash, and the 2022 bear market instead of one
+cherry-picked window, and genuinely point-in-time fundamentals instead of
+a present-day snapshot. CAGR beats buy-and-hold by 6.4 points/year with
+essentially the same drawdown and a meaningfully better Sharpe ratio.
+
+**One honest limitation that remains:** the ~59-symbol candidate universe
+was chosen *today* (2026), so it excludes companies that went bankrupt or
+were delisted between 2012 and now — survivorship bias in the *candidate
+pool*, not in the selection process itself (which genuinely only used
+data available at each historical date). A fully rigorous version would
+use the actual historical S&P 500 constituent list at each rebalance date
+rather than a modern, curated list of well-known large caps.
+
+**Shipped: `vpa_value_quality_pointintime.py`.** This is a materially
+stronger result than anything else added after the original leveraged
+trend-timing work, and unlike §14's screener, this one is a real,
+validated backtest — not an informational-only live snapshot.
+
+## 16. Whipsaw context (informational) — volatility-adjusted distance to the SMA
+
+In the week of 2026-11-03, a broad market selloff (QQQ -6.5%, XLK -8.0%,
+AMD -17.3%, MU -17.4%, CSCO -7.6% in one session) pushed most of the §9/§13
+portfolio below its 200-day SMA at once. AAL flipped BUY→CASH→BUY within
+two trading days, and EFA bounced off its SMA repeatedly over the
+following weeks without ever decisively crossing. Both symbols were
+sitting within about one typical day's move of their SMA right before
+flipping — the signal was reacting to noise, not a real trend change, and
+there was no way to see that from the BUY/CASH state alone.
+
+**This is reporting, not a strategy change.** The BUY/CASH rule itself
+(Close vs. 200-day SMA) is unchanged and untouched — per explicit
+instruction, any change to the actual signal logic would need its own
+walk-forward validation before being trusted, and nothing here warranted
+that: there's no new entry/exit rule to backtest, just a different lens on
+the same signal.
+
+**Added:** `vpa_leveraged_trend.sma_timing()` computes each symbol's gap
+to its SMA as a percentage, and its trailing 60-day average daily absolute
+move (also a percentage) — then expresses the gap in units of that
+symbol's own typical daily move (`days_to_cross = |gap%| / avg_daily_move%`).
+This is a rough "how many of this symbol's typical days would it take to
+close this gap if it moved steadily in one direction" heuristic, not a
+probabilistic forecast — real moves are closer to a random walk than
+steady drift, so the realized time to any actual cross will vary a lot.
+It's useful for exactly one thing: telling "near the SMA and could flip on
+ordinary noise" apart from "far from the SMA, a cross would mean something."
+
+Sanity check against the live whipsaws above: on 2026-11-08, EFA and AAL
+both came back under 1.1 "typical days," while QQQ/AMD/MU/CSCO were all
+above 2.4 — consistent with EFA and AAL being the ones that actually
+flipped and the others holding their state.
+
+**Shipped:** `scan_all_states_with_timing()`, printed alongside (not
+instead of) the existing BUY-only scanner in `main()`. Flags any symbol
+under `WHIPSAW_DAYS_THRESHOLD` (1.5 typical days). Also fixes a visibility
+gap the old scanner had on its own: it only ever printed symbols currently
+in BUY, so a CASH symbol (like AAL most of this document's tracking
+period) was invisible until it flipped. The new table reports all 9
+symbols' state every time, BUY or CASH.
+
+## 17. "Anticipate the big fast-money windows" — rejected after a real dig
+
+Direct ask: can price action alone warn, in advance, that a big fast move
+(the kind that produced AMD's +11% single-day bounce right after the
+2026-11-05 crash) is about to happen? Tested far beyond the original
+§16 whipsaw work — not just 5-day cumulative drops, but per-symbol
+z-scored drops (normalizing -12% for EFA, which is enormous for it,
+against -12% for AMD, which is routine), volume-confirmed capitulation,
+pullback-in-an-uptrend vs. bear-decline splits, single-day vs. multi-day
+crashes, and delayed entry after the crash. Same train/test discipline as
+everywhere else: pick nothing on the test half, only check it there.
+
+**Result: no configuration survived.** Several looked tempting in
+isolation (e.g. pullback-in-uptrend at the 20-day horizon: test t=+2.39)
+but none replicated in the SAME direction across both halves — the exact
+failure mode that killed momentum rotation in §8. With ~10 configurations
+× 3 horizons = 30 comparisons, finding one or two that clear t>1.96 by
+pure chance is expected, not evidence.
+
+**One real, but opposite-of-hoped-for, result:** buying immediately into
+a violent single-day crash (return 3+ standard deviations below the
+symbol's own trailing-252-day mean) is followed by *worse* than average
+returns over the next 5-10 days (test t=-2.60 to -3.40, consistent sign
+in both train and test). Same for crashes on 2x+ average volume
+(capitulation) — also followed by continued weakness, not an immediate
+bounce. "Don't buy the first violent drop" is real; "here's when the
+bounce happens" is not, from price action alone.
+
+## 18. VIX-confirmed crash re-entry — a real, regime-dependent edge found
+
+Follow-up ask: can options-derived signals ("the Greeks") warn of a crash
+in advance, and can they confirm when it's over? Clarification first:
+Delta/Gamma/Theta/Vega/Rho are properties of individual option contracts,
+not market signals by themselves — the actual options-derived fear gauge
+is implied volatility, i.e. the VIX. That's what's testable here with
+real data back to 1990.
+
+**Does VIX warn in advance? No.** Same-day correlation between a VIX
+spike and that day's stock return is strongly negative (avg -0.46 across
+the 9 symbols) — it moves WITH the crash. Correlation between today's VIX
+change and TOMORROW's return is ~0.00 to +0.05 — no advance warning
+exists in the VIX move itself.
+
+**Does VIX falling back from its post-crash peak mark a safer re-entry?
+Yes, with a real walk-forward-validated edge, but regime-dependent.**
+Rule tested: after a §17-style single-day crash, track VIX; if it falls
+15% from its post-crash peak within 15 trading days, that's the
+confirmation day — enter there instead of immediately, exit 10 days
+later or on the existing 5% hard stop, 0.1%/trade cost, unleveraged (1x,
+to isolate this effect from the separate leverage question in §9/§12/§13).
+
+| | Pre-2009 (dot-com era, no Fed-rescue backdrop) | Post-2009 (QE / "Fed put" era) |
+|---|---|---|
+| Buy immediately | no edge either way | **-1.67% excess over baseline, t=-2.48 (real, you lose money)** |
+| Wait for VIX confirmation | no edge either way | **+1.32% excess, t=+2.73, 63% win rate (real signal)** |
+
+The edge is specific to the post-2008 policy regime (rapid intervention →
+faster V-shaped recoveries once panic visibly peaks); it did not exist in
+the pre-2009 data, which includes crashes without that backdrop. It also
+held up when the post-2009 period was itself split in half (2009-2017 and
+2017-2026) — weaker in the second half (as expected for most things once
+discovered) but the same direction both times, not a one-slice fluke.
+
+**Full day-by-day equity-curve backtest** (same CAGR/MaxDD/Sharpe
+methodology as `vpa_leveraged_trend.py`), post-2009, comparing immediate
+entry to VIX-confirmed entry:
+
+| Symbol | Immediate CAGR | Confirmed CAGR | Immediate Sharpe | Confirmed Sharpe |
+|---|---|---|---|---|
+| QQQ | 4.72% | 2.68% | 0.67 | 0.52 |
+| XLK | 4.43% | 4.89% | 0.71 | 0.98 |
+| EFA | 5.12% | 5.74% | 0.77 | 1.04 |
+| AAL | 5.56% | 5.65% | 0.56 | 0.48 |
+| AMD | -0.29% | 4.28% | 0.02 | 0.61 |
+| M | 1.44% | 2.54% | 0.19 | 0.47 |
+| C | 0.72% | 9.28% | 0.12 | 0.68 |
+| MU | 3.42% | 5.26% | 0.37 | 0.55 |
+| CSCO | 7.10% | 6.17% | 0.84 | 0.87 |
+
+The filter helps 7 of 9 symbols (biggest gains on the single-stock names —
+AMD, C, M, MU — and EFA), is roughly neutral on AAL, and actively **hurts
+QQQ** (and marginally CSCO). QQQ's crashes in this data are rarer and
+milder than the others', so market-wide VIX panic isn't a well-matched
+filter for them — waiting just means missing QQQ's faster, calmer
+recoveries. CSCO and QQQ are excluded from the recommended symbol list in
+the shipped script.
+
+**Scale this honestly.** As built, this sits in cash almost all the time
+(crash events are rare) — its own standalone CAGR (3-9%) is far below
+buy-and-hold in a bull market, because it isn't trying to be a
+buy-and-hold replacement. It's a confirmation layer for the specific
+moment right after a crash, meant to sit alongside
+`vpa_leveraged_trend.py`'s everyday trend signal, not replace it.
+
+**Shipped: `vpa_vix_crash_confirmation.py`.** `evaluate()` reproduces the
+table above; `scan_crash_watch()` is the live tool — reports, per symbol,
+whether a qualifying crash happened recently, where VIX peaked since, and
+whether it's confirmed yet. As of 2026-11-08 (3 days after the broad
+2026-11-05 selloff): QQQ/XLK/AMD/MU/CSCO are all still "WATCHING" (VIX
+peaked at 28.2, now 25.6, needs ≤24.0 to confirm).
+
 ## Recommendation
 
 - **Do not trade the original VPA anomaly signal**, long/short or long-only,
   as configured. It is net-negative after realistic costs, and "improving"
   it via untested parameter tuning made it worse, not better.
-- **`vpa_leveraged_trend.py` (new, in this repo) is the actual answer to
-  "beat buy-and-hold"** — the only strategy in this document that did so on
-  real multi-decade history including two genuine bear markets, not just
-  the 2022-2026 recovery. Nine symbols total: QQQ (2x), XLK (3x), EFA (3x),
-  AAL/AMD/M/C/MU (unlevered — leverage hurts these, see §13), CSCO (2x via
-  margin). Same 200-day SMA entry and 5% hard stop throughout. This is the
-  maximum-profitability configuration per an explicit "don't care about
-  risk" instruction — real historical worst-case drawdowns run from -52%
-  (CSCO) to -88% (XLK), and the 6 individual stocks carry real
-  single-company risk (near-total wipeout in 2008 for AAL/C) that a
-  diversified fund doesn't. If risk tolerance changes, drop the ETFs to a
-  flat 2x (§12) for meaningfully better drawdown at a small CAGR cost on
-  XLK/EFA.
+- **`vpa_value_quality_pointintime.py` (§15) is the strongest result in
+  this document** — a real walk-forward backtest (14 independent annual
+  rebalances, 2012-2026) using genuine point-in-time SEC filings: 21.70%
+  CAGR vs. SPY's 15.29%, essentially matched drawdown, better Sharpe.
+  Unlike everything else here, this one selects *which stocks to own* by
+  fundamentals rather than timing entries/exits by price — a genuinely
+  different, complementary mechanism to the trend-timing strategies below.
+- **`vpa_leveraged_trend.py`** — the price/trend-based answer to "beat
+  buy-and-hold": the only *trend-timing* strategy in this document that
+  did so on real multi-decade history including two genuine bear markets,
+  not just the 2022-2026 recovery. Nine symbols total: QQQ (2x), XLK (3x),
+  EFA (3x), AAL/AMD/M/C/MU (unlevered — leverage hurts these, see §13),
+  CSCO (2x via margin). Same 200-day SMA entry and 5% hard stop
+  throughout. This is the maximum-profitability configuration per an
+  explicit "don't care about risk" instruction — real historical
+  worst-case drawdowns run from -52% (CSCO) to -88% (XLK), and the 6
+  individual stocks carry real single-company risk (near-total wipeout in
+  2008 for AAL/C) that a diversified fund doesn't. If risk tolerance
+  changes, drop the ETFs to a flat 2x (§12) for meaningfully better
+  drawdown at a small CAGR cost on XLK/EFA.
 - **`vpa_trend_timing.py`** (unleveraged, wider whitelist) is the
   risk-managed alternative: it trails buy-and-hold on raw CAGR in the
   2022-2026 window specifically, but delivers similar-to-competitive
   returns on many symbols individually with meaningfully lower drawdown,
   and (with the §7 hard stop) caps worst-case single-trade loss at -5%.
+- **`vpa_vix_crash_confirmation.py` (§18)** — a real, validated
+  confirmation layer for the specific moment after a crash: wait for VIX
+  to fall 15% off its post-crash peak before re-entering, rather than
+  buying immediately (loses money, §17/§18) or waiting for the slow
+  200-day SMA (§9) to recover. Helps 7 of 9 symbols, excludes QQQ and
+  CSCO (hurts both — see §18). Regime-dependent: validated post-2009
+  only, did not hold pre-2009. Rare, cash-heavy, event-driven — a
+  supplement to `vpa_leveraged_trend.py`, not a replacement.
 - Momentum rotation (§8), CMF/accumulation signals (§6), a volatility-spike
-  exit (§10), and options leverage (§11) were all tested and rejected —
-  see each section for why. Don't re-try these without a new idea for why
+  exit (§10), options leverage (§11), and anticipating big fast-money
+  moves from price action alone (§17) were all tested and rejected — see
+  each section for why. Don't re-try these without a new idea for why
   they'd behave differently; the same mechanisms that failed them once
   will fail them again.
 - `vpa_coulling.py` and `vpa_etf_daily.py` remain useful as anomaly

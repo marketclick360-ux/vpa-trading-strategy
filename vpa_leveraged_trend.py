@@ -95,6 +95,31 @@ LEVERAGED_PRODUCT = {
 }
 SYMBOLS = list(LEVERAGED_PRODUCT.keys())
 
+# A symbol's own trailing volatility sets the bar for "how fast could this
+# flip." Below this many typical-move-sized days from the SMA, the current
+# BUY/CASH state is low-confidence -- AAL and EFA both sat under 1.5 days
+# here right before whipsawing (AAL BUY->CASH->BUY, EFA repeated near-misses)
+# in the week of 2026-11-03.
+WHIPSAW_DAYS_THRESHOLD = 1.5
+VOLATILITY_WINDOW = 60
+
+
+def sma_timing(df, sma_len=SMA_LEN, vol_window=VOLATILITY_WINDOW):
+    """Gap to the 200-day SMA, expressed in units of this symbol's OWN
+    recent typical daily move -- not a forecast, just a volatility-adjusted
+    distance. A symbol sitting within ~1 typical day of its SMA can flip on
+    routine noise; one many days out needs a real, sustained move."""
+    close = df['Close']
+    sma = close.rolling(sma_len).mean()
+    rets = close.pct_change()
+    avg_daily_move_pct = rets.tail(vol_window).abs().mean() * 100
+    gap_pct = (close.iloc[-1] - sma.iloc[-1]) / sma.iloc[-1] * 100
+    days_to_cross = abs(gap_pct) / avg_daily_move_pct if avg_daily_move_pct > 0 else float('inf')
+    return {
+        'price': close.iloc[-1], 'sma': sma.iloc[-1], 'gap_pct': gap_pct,
+        'avg_daily_move_pct': avg_daily_move_pct, 'days_to_cross': days_to_cross,
+    }
+
 
 def get_full_history(symbol):
     df = yf.download(symbol, period="max", progress=False, auto_adjust=True)
@@ -231,6 +256,32 @@ def scan_buy_signals_only(symbols=None, stop_loss_pct=STOP_LOSS_PCT):
     print(f"{'=' * 70}\n")
 
 
+def scan_all_states_with_timing(symbols=None):
+    """Informational only -- does NOT change the BUY/CASH signal itself
+    (still the plain Close vs 200-day SMA rule). Reports every symbol,
+    including ones currently in CASH that scan_buy_signals_only() would
+    stay silent on, with each symbol's gap to its SMA measured against its
+    OWN recent volatility so a flip can be read as "routine noise" vs "a
+    real move" -- see WHIPSAW_DAYS_THRESHOLD above."""
+    symbols = symbols or SYMBOLS
+    print(f"\n{'=' * 70}")
+    print(f"  SMA DISTANCE / WHIPSAW CONTEXT (informational, signal unchanged) - {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"{'=' * 70}")
+    for sym in symbols:
+        try:
+            df = get_full_history(sym)
+            if df is None or len(df) < SMA_LEN + VOLATILITY_WINDOW:
+                continue
+            t = sma_timing(df)
+            state = 'BUY ' if t['gap_pct'] > 0 else 'CASH'
+            flag = '  <-- WHIPSAW RISK (near SMA vs its own volatility)' if t['days_to_cross'] < WHIPSAW_DAYS_THRESHOLD else ''
+            print(f"  {state} {sym:6s} | ${t['price']:.2f} vs SMA ${t['sma']:.2f} | gap {t['gap_pct']:+.2f}% | "
+                  f"typical daily move {t['avg_daily_move_pct']:.2f}% | ~{t['days_to_cross']:.1f} typical days from crossing{flag}")
+        except Exception:
+            continue
+    print(f"{'=' * 70}\n")
+
+
 def main():
     print("Trend Timing Portfolio -- QQQ/XLK/EFA (leveraged) + AAL/AMD/M/C/MU/CSCO (stocks)")
     print("Validated beating buy-and-hold on real multi-decade history")
@@ -238,6 +289,7 @@ def main():
     print("See VPA_DIAGNOSIS.md SS7-SS8 (ETFs) and SS13 (stocks) for the full derivation.\n")
     evaluate(label="(full history, 20-50yrs incl. dot-com + GFC)")
     scan_buy_signals_only()
+    scan_all_states_with_timing()
 
 
 if __name__ == '__main__':

@@ -29,7 +29,18 @@ signals are net-negative and should not be traded. `vpa_coulling.py` and
 `vpa_etf_daily.py` are still useful as anomaly *scanners* for awareness, but
 not as mechanical trading signals.
 
-**`vpa_leveraged_trend.py` is the strategy that actually beats buy-and-hold**
+**`vpa_value_quality_pointintime.py` is the strongest validated result in this
+repo** — a real walk-forward backtest (14 independent annual rebalances,
+2012-2026, using genuine SEC EDGAR filing dates, not a present-day snapshot):
+21.70% CAGR vs. SPY's 15.29%, essentially matched drawdown, better Sharpe
+(1.12 vs 0.94). Selects *which stocks to own* by fundamentals (Magic
+Formula-style: earnings yield + ROE) rather than timing entries by price —
+a different, complementary mechanism to everything else here. See
+`VPA_DIAGNOSIS.md` §14-15 for the full derivation, including a critique of
+a paper that inspired this and why its headline number shouldn't be trusted
+as-is.
+
+**`vpa_leveraged_trend.py` is the trend-timing strategy that beats buy-and-hold**
 — validated on 20-50 years of history including the dot-com bust and 2008
 (not just the recent bull market): 200-day SMA entry + 5% hard stop across
 9 symbols. QQQ (2x), XLK (3x), EFA (3x) — diversified funds, leverage
@@ -43,6 +54,30 @@ worst-case drawdowns run from -52% to -88% depending on the symbol. See
 `VPA_DIAGNOSIS.md` §9, §12, and §13 for the full derivation and numbers,
 and §11 for why options (not leveraged ETFs/margin) were tested and
 rejected as the leverage mechanism.
+
+`vpa_leveraged_trend.main()` also prints a whipsaw-context table
+(`scan_all_states_with_timing()`) alongside the signal: every symbol's gap
+to its 200-day SMA measured in units of its OWN recent typical daily move.
+This is purely informational — it does not change the BUY/CASH rule itself
+— but a symbol within ~1.5 typical days of its SMA is flagged, since a flip
+there can be routine noise rather than a real trend change. AAL and EFA
+both showed under 1.1 "typical days" right before actually whipsawing
+(AAL: BUY→CASH→BUY; EFA: repeated near-misses) in the week of 2026-11-03 —
+see `VPA_DIAGNOSIS.md` §16.
+
+**`vpa_vix_crash_confirmation.py`** answers "after a crash, when is it
+safer to buy back in?" The VIX itself does NOT warn in advance (it moves
+with a crash, not before it — same-day correlation ~-0.46, next-day ~0.00).
+But after a crash, waiting for VIX to fall 15% off its post-crash peak
+before re-entering — instead of buying immediately, which loses money
+(§17/§18) — is a real, walk-forward validated edge in 7 of 9 symbols
+(post-2009 regime; it did not hold pre-2009). Excludes QQQ and CSCO,
+which this filter actively hurts. Run `scan_crash_watch()` for the live
+state — as of 2026-11-08, several symbols from this week's selloff are
+still "WATCHING" for VIX to confirm. See `VPA_DIAGNOSIS.md` §18.
+Attempting to predict the big move itself from price action alone (§17)
+was tried in depth and rejected — no configuration survived a train/test
+split.
 
 **`vpa_trend_timing.py`** (SMA-200 trend timing + a hard 5% stop-loss, cash
 at T-bill yield when flat, unleveraged, wider whitelist) is the risk-managed
