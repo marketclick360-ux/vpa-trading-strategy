@@ -65,6 +65,20 @@ both showed under 1.1 "typical days" right before actually whipsawing
 (AAL: BUY→CASH→BUY; EFA: repeated near-misses) in the week of 2026-11-03 —
 see `VPA_DIAGNOSIS.md` §16.
 
+**`vpa_vix_crash_confirmation.py`** answers "after a crash, when is it
+safer to buy back in?" The VIX itself does NOT warn in advance (it moves
+with a crash, not before it — same-day correlation ~-0.46, next-day ~0.00).
+But after a crash, waiting for VIX to fall 15% off its post-crash peak
+before re-entering — instead of buying immediately, which loses money
+(§17/§18) — is a real, walk-forward validated edge in 7 of 9 symbols
+(post-2009 regime; it did not hold pre-2009). Excludes QQQ and CSCO,
+which this filter actively hurts. Run `scan_crash_watch()` for the live
+state — as of 2026-11-08, several symbols from this week's selloff are
+still "WATCHING" for VIX to confirm. See `VPA_DIAGNOSIS.md` §18.
+Attempting to predict the big move itself from price action alone (§17)
+was tried in depth and rejected — no configuration survived a train/test
+split.
+
 **`vpa_trend_timing.py`** (SMA-200 trend timing + a hard 5% stop-loss, cash
 at T-bill yield when flat, unleveraged, wider whitelist) is the risk-managed
 alternative — it trails buy-and-hold on raw CAGR in the tested 2022–2026

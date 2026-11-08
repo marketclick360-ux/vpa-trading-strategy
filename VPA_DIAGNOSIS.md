@@ -502,6 +502,107 @@ in BUY, so a CASH symbol (like AAL most of this document's tracking
 period) was invisible until it flipped. The new table reports all 9
 symbols' state every time, BUY or CASH.
 
+## 17. "Anticipate the big fast-money windows" — rejected after a real dig
+
+Direct ask: can price action alone warn, in advance, that a big fast move
+(the kind that produced AMD's +11% single-day bounce right after the
+2026-11-05 crash) is about to happen? Tested far beyond the original
+§16 whipsaw work — not just 5-day cumulative drops, but per-symbol
+z-scored drops (normalizing -12% for EFA, which is enormous for it,
+against -12% for AMD, which is routine), volume-confirmed capitulation,
+pullback-in-an-uptrend vs. bear-decline splits, single-day vs. multi-day
+crashes, and delayed entry after the crash. Same train/test discipline as
+everywhere else: pick nothing on the test half, only check it there.
+
+**Result: no configuration survived.** Several looked tempting in
+isolation (e.g. pullback-in-uptrend at the 20-day horizon: test t=+2.39)
+but none replicated in the SAME direction across both halves — the exact
+failure mode that killed momentum rotation in §8. With ~10 configurations
+× 3 horizons = 30 comparisons, finding one or two that clear t>1.96 by
+pure chance is expected, not evidence.
+
+**One real, but opposite-of-hoped-for, result:** buying immediately into
+a violent single-day crash (return 3+ standard deviations below the
+symbol's own trailing-252-day mean) is followed by *worse* than average
+returns over the next 5-10 days (test t=-2.60 to -3.40, consistent sign
+in both train and test). Same for crashes on 2x+ average volume
+(capitulation) — also followed by continued weakness, not an immediate
+bounce. "Don't buy the first violent drop" is real; "here's when the
+bounce happens" is not, from price action alone.
+
+## 18. VIX-confirmed crash re-entry — a real, regime-dependent edge found
+
+Follow-up ask: can options-derived signals ("the Greeks") warn of a crash
+in advance, and can they confirm when it's over? Clarification first:
+Delta/Gamma/Theta/Vega/Rho are properties of individual option contracts,
+not market signals by themselves — the actual options-derived fear gauge
+is implied volatility, i.e. the VIX. That's what's testable here with
+real data back to 1990.
+
+**Does VIX warn in advance? No.** Same-day correlation between a VIX
+spike and that day's stock return is strongly negative (avg -0.46 across
+the 9 symbols) — it moves WITH the crash. Correlation between today's VIX
+change and TOMORROW's return is ~0.00 to +0.05 — no advance warning
+exists in the VIX move itself.
+
+**Does VIX falling back from its post-crash peak mark a safer re-entry?
+Yes, with a real walk-forward-validated edge, but regime-dependent.**
+Rule tested: after a §17-style single-day crash, track VIX; if it falls
+15% from its post-crash peak within 15 trading days, that's the
+confirmation day — enter there instead of immediately, exit 10 days
+later or on the existing 5% hard stop, 0.1%/trade cost, unleveraged (1x,
+to isolate this effect from the separate leverage question in §9/§12/§13).
+
+| | Pre-2009 (dot-com era, no Fed-rescue backdrop) | Post-2009 (QE / "Fed put" era) |
+|---|---|---|
+| Buy immediately | no edge either way | **-1.67% excess over baseline, t=-2.48 (real, you lose money)** |
+| Wait for VIX confirmation | no edge either way | **+1.32% excess, t=+2.73, 63% win rate (real signal)** |
+
+The edge is specific to the post-2008 policy regime (rapid intervention →
+faster V-shaped recoveries once panic visibly peaks); it did not exist in
+the pre-2009 data, which includes crashes without that backdrop. It also
+held up when the post-2009 period was itself split in half (2009-2017 and
+2017-2026) — weaker in the second half (as expected for most things once
+discovered) but the same direction both times, not a one-slice fluke.
+
+**Full day-by-day equity-curve backtest** (same CAGR/MaxDD/Sharpe
+methodology as `vpa_leveraged_trend.py`), post-2009, comparing immediate
+entry to VIX-confirmed entry:
+
+| Symbol | Immediate CAGR | Confirmed CAGR | Immediate Sharpe | Confirmed Sharpe |
+|---|---|---|---|---|
+| QQQ | 4.72% | 2.68% | 0.67 | 0.52 |
+| XLK | 4.43% | 4.89% | 0.71 | 0.98 |
+| EFA | 5.12% | 5.74% | 0.77 | 1.04 |
+| AAL | 5.56% | 5.65% | 0.56 | 0.48 |
+| AMD | -0.29% | 4.28% | 0.02 | 0.61 |
+| M | 1.44% | 2.54% | 0.19 | 0.47 |
+| C | 0.72% | 9.28% | 0.12 | 0.68 |
+| MU | 3.42% | 5.26% | 0.37 | 0.55 |
+| CSCO | 7.10% | 6.17% | 0.84 | 0.87 |
+
+The filter helps 7 of 9 symbols (biggest gains on the single-stock names —
+AMD, C, M, MU — and EFA), is roughly neutral on AAL, and actively **hurts
+QQQ** (and marginally CSCO). QQQ's crashes in this data are rarer and
+milder than the others', so market-wide VIX panic isn't a well-matched
+filter for them — waiting just means missing QQQ's faster, calmer
+recoveries. CSCO and QQQ are excluded from the recommended symbol list in
+the shipped script.
+
+**Scale this honestly.** As built, this sits in cash almost all the time
+(crash events are rare) — its own standalone CAGR (3-9%) is far below
+buy-and-hold in a bull market, because it isn't trying to be a
+buy-and-hold replacement. It's a confirmation layer for the specific
+moment right after a crash, meant to sit alongside
+`vpa_leveraged_trend.py`'s everyday trend signal, not replace it.
+
+**Shipped: `vpa_vix_crash_confirmation.py`.** `evaluate()` reproduces the
+table above; `scan_crash_watch()` is the live tool — reports, per symbol,
+whether a qualifying crash happened recently, where VIX peaked since, and
+whether it's confirmed yet. As of 2026-11-08 (3 days after the broad
+2026-11-05 selloff): QQQ/XLK/AMD/MU/CSCO are all still "WATCHING" (VIX
+peaked at 28.2, now 25.6, needs ≤24.0 to confirm).
+
 ## Recommendation
 
 - **Do not trade the original VPA anomaly signal**, long/short or long-only,
@@ -532,9 +633,18 @@ symbols' state every time, BUY or CASH.
   2022-2026 window specifically, but delivers similar-to-competitive
   returns on many symbols individually with meaningfully lower drawdown,
   and (with the §7 hard stop) caps worst-case single-trade loss at -5%.
+- **`vpa_vix_crash_confirmation.py` (§18)** — a real, validated
+  confirmation layer for the specific moment after a crash: wait for VIX
+  to fall 15% off its post-crash peak before re-entering, rather than
+  buying immediately (loses money, §17/§18) or waiting for the slow
+  200-day SMA (§9) to recover. Helps 7 of 9 symbols, excludes QQQ and
+  CSCO (hurts both — see §18). Regime-dependent: validated post-2009
+  only, did not hold pre-2009. Rare, cash-heavy, event-driven — a
+  supplement to `vpa_leveraged_trend.py`, not a replacement.
 - Momentum rotation (§8), CMF/accumulation signals (§6), a volatility-spike
-  exit (§10), and options leverage (§11) were all tested and rejected —
-  see each section for why. Don't re-try these without a new idea for why
+  exit (§10), options leverage (§11), and anticipating big fast-money
+  moves from price action alone (§17) were all tested and rejected — see
+  each section for why. Don't re-try these without a new idea for why
   they'd behave differently; the same mechanisms that failed them once
   will fail them again.
 - `vpa_coulling.py` and `vpa_etf_daily.py` remain useful as anomaly
