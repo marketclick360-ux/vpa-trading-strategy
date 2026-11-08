@@ -460,6 +460,48 @@ stronger result than anything else added after the original leveraged
 trend-timing work, and unlike §14's screener, this one is a real,
 validated backtest — not an informational-only live snapshot.
 
+## 16. Whipsaw context (informational) — volatility-adjusted distance to the SMA
+
+In the week of 2026-11-03, a broad market selloff (QQQ -6.5%, XLK -8.0%,
+AMD -17.3%, MU -17.4%, CSCO -7.6% in one session) pushed most of the §9/§13
+portfolio below its 200-day SMA at once. AAL flipped BUY→CASH→BUY within
+two trading days, and EFA bounced off its SMA repeatedly over the
+following weeks without ever decisively crossing. Both symbols were
+sitting within about one typical day's move of their SMA right before
+flipping — the signal was reacting to noise, not a real trend change, and
+there was no way to see that from the BUY/CASH state alone.
+
+**This is reporting, not a strategy change.** The BUY/CASH rule itself
+(Close vs. 200-day SMA) is unchanged and untouched — per explicit
+instruction, any change to the actual signal logic would need its own
+walk-forward validation before being trusted, and nothing here warranted
+that: there's no new entry/exit rule to backtest, just a different lens on
+the same signal.
+
+**Added:** `vpa_leveraged_trend.sma_timing()` computes each symbol's gap
+to its SMA as a percentage, and its trailing 60-day average daily absolute
+move (also a percentage) — then expresses the gap in units of that
+symbol's own typical daily move (`days_to_cross = |gap%| / avg_daily_move%`).
+This is a rough "how many of this symbol's typical days would it take to
+close this gap if it moved steadily in one direction" heuristic, not a
+probabilistic forecast — real moves are closer to a random walk than
+steady drift, so the realized time to any actual cross will vary a lot.
+It's useful for exactly one thing: telling "near the SMA and could flip on
+ordinary noise" apart from "far from the SMA, a cross would mean something."
+
+Sanity check against the live whipsaws above: on 2026-11-08, EFA and AAL
+both came back under 1.1 "typical days," while QQQ/AMD/MU/CSCO were all
+above 2.4 — consistent with EFA and AAL being the ones that actually
+flipped and the others holding their state.
+
+**Shipped:** `scan_all_states_with_timing()`, printed alongside (not
+instead of) the existing BUY-only scanner in `main()`. Flags any symbol
+under `WHIPSAW_DAYS_THRESHOLD` (1.5 typical days). Also fixes a visibility
+gap the old scanner had on its own: it only ever printed symbols currently
+in BUY, so a CASH symbol (like AAL most of this document's tracking
+period) was invisible until it flipped. The new table reports all 9
+symbols' state every time, BUY or CASH.
+
 ## Recommendation
 
 - **Do not trade the original VPA anomaly signal**, long/short or long-only,

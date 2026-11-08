@@ -55,6 +55,16 @@ worst-case drawdowns run from -52% to -88% depending on the symbol. See
 and §11 for why options (not leveraged ETFs/margin) were tested and
 rejected as the leverage mechanism.
 
+`vpa_leveraged_trend.main()` also prints a whipsaw-context table
+(`scan_all_states_with_timing()`) alongside the signal: every symbol's gap
+to its 200-day SMA measured in units of its OWN recent typical daily move.
+This is purely informational — it does not change the BUY/CASH rule itself
+— but a symbol within ~1.5 typical days of its SMA is flagged, since a flip
+there can be routine noise rather than a real trend change. AAL and EFA
+both showed under 1.1 "typical days" right before actually whipsawing
+(AAL: BUY→CASH→BUY; EFA: repeated near-misses) in the week of 2026-11-03 —
+see `VPA_DIAGNOSIS.md` §16.
+
 **`vpa_trend_timing.py`** (SMA-200 trend timing + a hard 5% stop-loss, cash
 at T-bill yield when flat, unleveraged, wider whitelist) is the risk-managed
 alternative — it trails buy-and-hold on raw CAGR in the tested 2022–2026
